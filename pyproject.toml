@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Droidlate: A local web-based Weblate-like UI for managing and editing Android strings.xml translations."
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "MIT" }
+license = { text = "GPL-3.0" }
 dependencies = [
     "flask>=3.0.0",
     "requests>=2.31.0"

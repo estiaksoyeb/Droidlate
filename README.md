@@ -1,10 +1,10 @@
-# Droidlate 🌐
+# Droidlate
 
 **Droidlate** is a lightweight, local, web-based translation workspace for Android `strings.xml` resource files. It features a clean, responsive, Weblate-inspired Single Page Application (SPA) designed to make translating Android applications fast, accurate, and resilient.
 
 ---
 
-## 🎯 Core Usecases
+## Core Usecases
 
 * **Local Offline Workspace:** Translate and edit local localization files on your machine. Avoid uploading sensitive resource files to third-party servers or setting up heavy server-side infrastructure.
 * **Preserving XML Formatting & Comments:** Standard XML parsers rewrite files, wiping out comments, custom spacing, ordering, and attributes. Droidlate's custom parsing engine performs in-place character index replacements to maintain exact XML styling, comments, structure, and formatting.
@@ -14,7 +14,7 @@
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 * **Sleek UI with Dark Mode:** A modern HSL-tailored interface featuring layout toggles (especially optimized for mobile web layouts), status indicators, and translation statistics.
 * **Keyboard Shortcuts:** Built for productivity. Use `Ctrl+S` to instantly Save & Next, and `Alt+1`/`Alt+2` to paste dynamic suggestions.
@@ -24,7 +24,7 @@
 
 ---
 
-## ⚙️ Installation
+## Installation
 
 To install Droidlate locally in edit mode:
 
@@ -42,7 +42,7 @@ pip install -r requirements.txt
 
 ---
 
-## 🛠️ Usage & CLI Commands
+## Usage & CLI Commands
 
 Once installed, you can launch the Droidlate workspace using the `droidlate` CLI command:
 
@@ -72,7 +72,7 @@ droidlate --port 8080
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```text
 ├── android_translator/            # Package root (retains package layout under-the-hood)
@@ -93,6 +93,12 @@ droidlate --port 8080
 
 ---
 
-## 🛡️ License
+## Credits
 
-This project is licensed under the MIT License. See [LICENSE](file:///root/Projects/android-translator/LICENSE) for details.
+* Droidlate's auto-translation suggestions feature was inspired by [Android strings.xml Translator](https://github.com/Heitezy/android_xml_translator).
+
+---
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0). See [LICENSE](file:///root/Projects/android-translator/LICENSE) for details.
