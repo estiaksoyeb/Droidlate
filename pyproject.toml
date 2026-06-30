@@ -3,10 +3,10 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "android-translator"
+name = "droidlate"
 version = "1.0.0"
-description = "A local web-based Weblate-like UI for managing and editing Android strings.xml translations."
-readme = "translation_tool_design.md"
+description = "Droidlate: A local web-based Weblate-like UI for managing and editing Android strings.xml translations."
+readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
 dependencies = [
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-android-translate = "android_translator.main:main"
+droidlate = "android_translator.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

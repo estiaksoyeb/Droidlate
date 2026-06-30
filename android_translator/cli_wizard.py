@@ -7,7 +7,7 @@ from .parser.diff_engine import load_metadata, update_metadata_entry, categorize
 from .main import auto_detect_res_dir
 
 def run_wizard():
-    print("=== Android Translation Manager: CLI Wizard ===")
+    print("=== Droidlate: CLI Wizard ===")
     
     # Auto-detect res dir
     res_dir = auto_detect_res_dir()

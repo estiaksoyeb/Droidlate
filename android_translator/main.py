@@ -39,7 +39,7 @@ def open_browser_after_delay(url: str, delay: float = 0.5):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Android XML Translation Manager (Local Web Workspace)"
+        description="Droidlate — A local web-based Weblate-like UI for Android strings.xml translations"
     )
     
     # Resource directory scanning mode
@@ -82,7 +82,7 @@ def main():
             print(f"Error: Source file does not exist: {args.source}", file=sys.stderr)
             sys.exit(1)
             
-        print(f"Running Android XML Translation Manager...")
+        print(f"Running Droidlate...")
         print(f"Web server running at {url}")
         print("Press Ctrl+C to stop.")
         
@@ -112,7 +112,7 @@ def main():
             )
             sys.exit(1)
 
-        print(f"Running Android XML Translation Manager...")
+        print(f"Running Droidlate...")
         print(f"Web server running at {url}")
         print("Press Ctrl+C to stop.")
         
