@@ -75,7 +75,7 @@ droidlate --port 8080
 ## Repository Structure
 
 ```text
-├── android_translator/            # Package root (retains package layout under-the-hood)
+├── droidlate/                     # Package root
 │   ├── parser/
 │   │   ├── xml_parser.py          # Expat character-level round-trip parser
 │   │   └── diff_engine.py         # Hashing, validation, and status engines
