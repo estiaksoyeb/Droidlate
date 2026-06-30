@@ -84,10 +84,7 @@ def main():
             
         print(f"Running Android XML Translation Manager...")
         print(f"Web server running at {url}")
-        print("Opening browser to start translating...")
         print("Press Ctrl+C to stop.")
-        
-        open_browser_after_delay(url)
         
         # Start server in single file mode
         start_web_server(
@@ -117,10 +114,7 @@ def main():
 
         print(f"Running Android XML Translation Manager...")
         print(f"Web server running at {url}")
-        print("Opening browser to start translating...")
         print("Press Ctrl+C to stop.")
-        
-        open_browser_after_delay(url)
         
         # Start server in directory scanning mode
         start_web_server(res_dir=res_dir, port=args.port)
