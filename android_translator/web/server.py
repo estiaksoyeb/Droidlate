@@ -35,6 +35,20 @@ def get_project():
         target_entries = parse_strings_xml(TARGET_XML) if os.path.exists(TARGET_XML) else {}
         metadata = load_metadata(TARGET_XML)
         
+        metadata_changed = False
+        for key, entry in source_entries.items():
+            if key in target_entries and key not in metadata:
+                from ..parser.diff_engine import normalize_source_string, compute_source_hash
+                norm_src = normalize_source_string(entry.value)
+                metadata[key] = {
+                    "source_hash": compute_source_hash(norm_src),
+                    "translated_value": target_entries[key].value
+                }
+                metadata_changed = True
+        if metadata_changed:
+            from ..parser.diff_engine import save_metadata
+            save_metadata(TARGET_XML, metadata)
+            
         total = len(source_entries)
         untranslated = 0
         outdated = 0
@@ -86,10 +100,25 @@ def get_project():
         
         for folder in os.listdir(RES_DIR):
             folder_path = os.path.join(RES_DIR, folder)
-            if os.path.isdir(folder_path) and folder.startswith("values-"):
+            match = re.match(r"^values-([a-z]{2,3})(?:-r([a-zA-Z]{2,4}))?$", folder)
+            if os.path.isdir(folder_path) and match:
                 target_xml = os.path.join(folder_path, "strings.xml")
                 target_entries = parse_strings_xml(target_xml) if os.path.exists(target_xml) else {}
                 metadata = load_metadata(target_xml)
+                
+                metadata_changed = False
+                for key, entry in source_entries.items():
+                    if key in target_entries and key not in metadata:
+                        from ..parser.diff_engine import normalize_source_string, compute_source_hash
+                        norm_src = normalize_source_string(entry.value)
+                        metadata[key] = {
+                            "source_hash": compute_source_hash(norm_src),
+                            "translated_value": target_entries[key].value
+                        }
+                        metadata_changed = True
+                if metadata_changed:
+                    from ..parser.diff_engine import save_metadata
+                    save_metadata(target_xml, metadata)
                 
                 untranslated = 0
                 outdated = 0
@@ -150,6 +179,20 @@ def get_strings():
     source_entries = parse_strings_xml(src_path)
     target_entries = parse_strings_xml(tgt_path) if os.path.exists(tgt_path) else {}
     metadata = load_metadata(tgt_path)
+    
+    metadata_changed = False
+    for key, entry in source_entries.items():
+        if key in target_entries and key not in metadata:
+            from ..parser.diff_engine import normalize_source_string, compute_source_hash
+            norm_src = normalize_source_string(entry.value)
+            metadata[key] = {
+                "source_hash": compute_source_hash(norm_src),
+                "translated_value": target_entries[key].value
+            }
+            metadata_changed = True
+    if metadata_changed:
+        from ..parser.diff_engine import save_metadata
+        save_metadata(tgt_path, metadata)
     
     strings_list = []
     

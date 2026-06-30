@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 
 from .parser.xml_parser import parse_strings_xml, write_string_translation
 from .parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, validate_placeholders
@@ -26,7 +27,8 @@ def run_wizard():
     locales = []
     for folder in os.listdir(res_dir):
         folder_path = os.path.join(res_dir, folder)
-        if os.path.isdir(folder_path) and folder.startswith("values-"):
+        match = re.match(r"^values-([a-z]{2,3})(?:-r([a-zA-Z]{2,4}))?$", folder)
+        if os.path.isdir(folder_path) and match:
             target_xml = os.path.join(folder_path, "strings.xml")
             locales.append((folder, target_xml))
             
@@ -53,6 +55,20 @@ def run_wizard():
     # Load target entries and metadata
     target_entries = parse_strings_xml(target_xml) if os.path.exists(target_xml) else {}
     metadata = load_metadata(target_xml)
+    
+    metadata_changed = False
+    for key, entry in source_entries.items():
+        if key in target_entries and key not in metadata:
+            from .parser.diff_engine import normalize_source_string, compute_source_hash
+            norm_src = normalize_source_string(entry.value)
+            metadata[key] = {
+                "source_hash": compute_source_hash(norm_src),
+                "translated_value": target_entries[key].value
+            }
+            metadata_changed = True
+    if metadata_changed:
+        from .parser.diff_engine import save_metadata
+        save_metadata(target_xml, metadata)
     
     # Filter keys needing attention (untranslated, outdated, warnings)
     todo_keys = []
