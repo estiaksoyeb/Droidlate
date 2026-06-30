@@ -4,8 +4,6 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Ignore local translation tool draft specification
-translation_tool_design.md
 
 # Ignore MRCS/RCS revision control files
 .mrcs/
