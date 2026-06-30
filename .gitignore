@@ -1,0 +1,24 @@
+# Ignore python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore local translation tool draft specification
+translation_tool_design.md
+
+# Ignore MRCS/RCS revision control files
+.mrcs/
+.mrcs
+RCS/
+
+# Ignore Python build/distribution files
+build/
+android_translator.egg-info/
+
+# Ignore local scratch / temporary testing files
+scratch/
+test_resources/
+.venv/
+venv/
+.env

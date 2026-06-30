@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android XML Translation Manager</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Top Navigation Bar -->
+        <header class="app-header">
+            <div class="header-left">
+                <span class="logo-icon">🌐</span>
+                <h1>Android XML Translation Manager</h1>
+            </div>
+            <div class="header-right">
+                <span id="project-path-display" class="project-path">Loading project...</span>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="app-main">
+            <!-- 1. DASHBOARD VIEW -->
+            <section id="dashboard-view" class="view-section active">
+                <div class="view-header">
+                    <h2>Translation Dashboard</h2>
+                    <p class="subtitle">Select a target language to start reviewing and editing translations</p>
+                </div>
+                <div id="languages-grid" class="languages-grid">
+                    <!-- Cards will be dynamically inserted here -->
+                    <div class="loader-container">
+                        <div class="loader"></div>
+                        <p>Scanning resource directory...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. EDITOR WORKSPACE VIEW -->
+            <section id="editor-view" class="view-section">
+                <div class="editor-layout">
+                    <!-- Left Sidebar (Navigation & Filtering) -->
+                    <aside class="editor-sidebar">
+                        <div class="sidebar-header">
+                            <button id="btn-back-dashboard" class="btn-secondary">
+                                <span class="btn-icon">←</span> Dashboard
+                            </button>
+                        </div>
+                        <div class="search-filter-box">
+                            <label for="key-search">Search Keys</label>
+                            <input type="text" id="key-search" placeholder="Type key or text...">
+                        </div>
+                        <div class="status-filters">
+                            <button class="filter-tab active" data-filter="all">All</button>
+                            <button class="filter-tab" data-filter="untranslated">Untranslated</button>
+                            <button class="filter-tab" data-filter="outdated">Outdated</button>
+                            <button class="filter-tab" data-filter="warnings">Warnings</button>
+                        </div>
+                        <div class="sidebar-list-container">
+                            <ul id="keys-list" class="keys-list">
+                                <!-- Keys list items populated dynamically -->
+                            </ul>
+                        </div>
+                    </aside>
+
+                    <!-- Right Workspace Panel -->
+                    <article class="editor-workspace">
+                        <!-- Key Metadata Card -->
+                        <div class="metadata-card">
+                            <div class="meta-header">
+                                <span id="current-key-name" class="key-name">string:key_name</span>
+                                <span id="current-key-status" class="status-badge">UNTRANSLATED</span>
+                            </div>
+                            <div class="comment-block">
+                                <span class="block-label">Developer Comment</span>
+                                <p id="current-key-comment" class="comment-text">No comment provided.</p>
+                            </div>
+                            <div class="attribs-block">
+                                <span class="block-label">XML Attributes</span>
+                                <p id="current-key-attribs" class="attribs-text">None</p>
+                            </div>
+                        </div>
+
+                        <!-- Editor Fields Panel -->
+                        <div class="fields-card">
+                            <!-- Source Panel -->
+                            <div class="text-panel source-panel">
+                                <div class="panel-header">
+                                    <span class="block-label">Source Text</span>
+                                    <button id="btn-copy-source" class="btn-tiny" title="Copy source text">Copy</button>
+                                </div>
+                                <div id="source-text-display" class="text-display">Source text will appear here...</div>
+                            </div>
+
+                            <!-- Translation Panel -->
+                            <div class="text-panel translation-panel">
+                                <div class="panel-header">
+                                    <span class="block-label">Translation</span>
+                                    <span class="keyboard-hint">Ctrl+S to Save & Next</span>
+                                </div>
+                                <textarea id="translation-input" placeholder="Type target translation here..."></textarea>
+                            </div>
+
+                            <!-- Live Validation Block -->
+                            <div id="validation-panel" class="validation-panel">
+                                <div class="validation-header">
+                                    <span id="validation-icon" class="status-icon">✓</span>
+                                    <span id="validation-summary" class="validation-summary">No mismatches found</span>
+                                </div>
+                                <ul id="validation-errors-list" class="validation-errors-list">
+                                    <!-- Dynamic list of error messages -->
+                                </ul>
+                            </div>
+
+                            <!-- Auto-Suggestions Block -->
+                            <div class="suggestions-panel">
+                                <span class="block-label">Auto-Suggestions <span class="hint">(Click card or Alt+1, Alt+2 to paste)</span></span>
+                                <div id="suggestions-list" class="suggestions-list">
+                                    <!-- Dynamic list of suggestion cards -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Editor Footer / Actions -->
+                        <div class="workspace-footer">
+                            <button id="btn-skip-key" class="btn-secondary">Skip</button>
+                            <button id="btn-save-key" class="btn-primary">Save &amp; Next</button>
+                        </div>
+                    </article>
+                </div>
+            </section>
+        </main>
+
+        <!-- Bottom Application Status Bar -->
+        <footer class="app-status-bar">
+            <div id="status-left" class="status-left">
+                Running in single-file mode
+            </div>
+            <div class="status-center">
+                <div class="progress-bar-container">
+                    <div id="status-progress-fill" class="progress-fill" style="width: 0%;"></div>
+                </div>
+                <span id="status-progress-label">0% Done</span>
+            </div>
+            <div id="status-right" class="status-right">
+                Locales: 0
+            </div>
+        </footer>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>

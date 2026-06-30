@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "android-translator"
+version = "1.0.0"
+description = "A local web-based Weblate-like UI for managing and editing Android strings.xml translations."
+readme = "translation_tool_design.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+dependencies = [
+    "flask>=3.0.0",
+    "requests>=2.31.0"
+]
+
+[project.scripts]
+android-translate = "android_translator.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["android_translator*"]
+
+# Include web static files in package distribution
+[tool.setuptools.package-data]
+android_translator = ["web/static/*"]
