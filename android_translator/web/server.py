@@ -53,6 +53,7 @@ def get_project():
         untranslated = 0
         outdated = 0
         translated = 0
+        orphaned = len([k for k in target_entries.keys() if k not in source_entries])
         
         for key, entry in source_entries.items():
             tgt_val = target_entries.get(key).value if key in target_entries else None
@@ -82,6 +83,7 @@ def get_project():
                 "translated": translated,
                 "outdated": outdated,
                 "untranslated": untranslated,
+                "orphaned": orphaned,
                 "total": total,
                 "target_path": TARGET_XML
             }]
@@ -123,6 +125,7 @@ def get_project():
                 untranslated = 0
                 outdated = 0
                 translated = 0
+                orphaned = len([k for k in target_entries.keys() if k not in source_entries])
                 
                 for key, entry in source_entries.items():
                     tgt_val = target_entries.get(key).value if key in target_entries else None
@@ -146,6 +149,7 @@ def get_project():
                     "translated": translated,
                     "outdated": outdated,
                     "untranslated": untranslated,
+                    "orphaned": orphaned,
                     "total": total_keys,
                     "target_path": target_xml
                 })
@@ -181,6 +185,8 @@ def get_strings():
     metadata = load_metadata(tgt_path)
     
     metadata_changed = False
+    
+    # Auto-initialize legacy translations
     for key, entry in source_entries.items():
         if key in target_entries and key not in metadata:
             from ..parser.diff_engine import normalize_source_string, compute_source_hash
@@ -197,6 +203,8 @@ def get_strings():
     strings_list = []
     
     from ..parser.diff_engine import normalize_source_string, compute_source_hash
+    
+    # 1. Add current source entries
     for key, entry in source_entries.items():
         tgt_val = target_entries.get(key).value if key in target_entries else None
         meta_val = metadata.get(key)
@@ -214,6 +222,19 @@ def get_strings():
             "status": status,
             "attrib": entry.attrib
         })
+        
+    # 2. Add orphaned entries (exists in target but no longer in source)
+    for key in target_entries.keys():
+        if key not in source_entries:
+            strings_list.append({
+                "key": key,
+                "source": "(Removed from English source XML file)",
+                "source_hash": "",
+                "translation": target_entries[key].value,
+                "comment": "Orphaned key (no longer exists in source strings.xml)",
+                "status": "orphaned",
+                "attrib": target_entries[key].attrib
+            })
         
     return jsonify({
         "locale": lang_folder or os.path.basename(os.path.dirname(tgt_path)),
@@ -286,6 +307,40 @@ def get_suggestion():
     
     res = [{"provider": name, "text": val} for name, val in suggestions]
     return jsonify({"suggestions": res})
+
+@app.route('/api/prune', methods=['POST'])
+def prune_string():
+    """Removes an orphaned translation from target XML and metadata sidecar."""
+    global RES_DIR, SOURCE_XML, TARGET_XML, IS_SINGLE_FILE_MODE
+    data = request.get_json() or {}
+    lang = data.get('lang')
+    key = data.get('key')
+    
+    if not key:
+        return jsonify({"error": "Missing key."}), 400
+        
+    if IS_SINGLE_FILE_MODE:
+        tgt_path = TARGET_XML
+    else:
+        if not lang:
+            return jsonify({"error": "Missing lang."}), 400
+        tgt_path = os.path.join(RES_DIR, lang, "strings.xml")
+        
+    if not os.path.exists(tgt_path):
+        return jsonify({"error": "Target file does not exist."}), 404
+        
+    # Remove translation from target XML
+    from ..parser.xml_parser import remove_string_translation
+    success = remove_string_translation(tgt_path, key)
+    
+    # Remove entry from metadata JSON ledger
+    from ..parser.diff_engine import load_metadata, save_metadata
+    metadata = load_metadata(tgt_path)
+    if key in metadata:
+        del metadata[key]
+        save_metadata(tgt_path, metadata)
+        
+    return jsonify({"success": success})
 
 def start_web_server(res_dir=None, source_xml=None, target_xml=None, port=5000):
     """Initializes server context and launches the Flask web service."""

@@ -253,3 +253,80 @@ def write_string_translation(target_path: str, key: str, value: str, attrib: dic
             return True
 
     return False
+
+def remove_string_translation(target_path: str, key: str) -> bool:
+    """
+    Removes a translation for a specific key in target_path if it exists.
+    Preserves comments and formatting of all other tags.
+    """
+    if not os.path.exists(target_path):
+        return False
+
+    with open(target_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Parse boundaries using Expat parser
+    lines = content.splitlines(keepends=True)
+    
+    def get_index(line_num, col_num):
+        idx = 0
+        for i in range(line_num - 1):
+            if i < len(lines):
+                idx += len(lines[i])
+        idx += col_num
+        return idx
+
+    parser = xml.parsers.expat.ParserCreate()
+    current_string = None
+    string_positions = {}
+
+    def start_element(name, attrs):
+        nonlocal current_string
+        if name == 'string':
+            name_attr = attrs.get('name')
+            if name_attr:
+                current_string = name_attr
+                string_positions[current_string] = {
+                    'start_idx': get_index(parser.CurrentLineNumber, parser.CurrentColumnNumber)
+                }
+
+    def end_element(name):
+        nonlocal current_string
+        if name == 'string' and current_string:
+            string_positions[current_string]['end_idx'] = get_index(parser.CurrentLineNumber, parser.CurrentColumnNumber)
+            current_string = None
+
+    parser.StartElementHandler = start_element
+    parser.EndElementHandler = end_element
+
+    try:
+        parser.Parse(content)
+        has_key = key in string_positions
+    except Exception:
+        has_key = False
+
+    if has_key:
+        pos = string_positions[key]
+        del_start = pos['start_idx']
+        del_end = pos['end_idx'] + len("</string>")
+        
+        # Grab leading whitespace (indentation)
+        while del_start > 0 and content[del_start - 1] in (' ', '\t'):
+            del_start -= 1
+            
+        # Grab trailing newline
+        if del_end < len(content) and content[del_end] == '\n':
+            del_end += 1
+        elif del_end < len(content) and content[del_end] == '\r':
+            del_end += 1
+            if del_end < len(content) and content[del_end] == '\n':
+                del_end += 1
+                
+        # Slice it out
+        new_content = content[:del_start] + content[del_end:]
+        with open(target_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        return True
+
+    return False
+

@@ -34,6 +34,7 @@ const el = {
     suggestionsList: document.getElementById('suggestions-list'),
     btnSkipKey: document.getElementById('btn-skip-key'),
     btnSaveKey: document.getElementById('btn-save-key'),
+    btnPruneKey: document.getElementById('btn-prune-key'),
     statusBarLeft: document.getElementById('status-left'),
     statusBarProgressFill: document.getElementById('status-progress-fill'),
     statusBarProgressLabel: document.getElementById('status-progress-label'),
@@ -79,6 +80,7 @@ function setupEventListeners() {
 
     // Save & Skip triggers
     el.btnSaveKey.addEventListener('click', saveCurrentTranslation);
+    el.btnPruneKey.addEventListener('click', pruneCurrentTranslation);
     el.btnSkipKey.addEventListener('click', navigateNextAttention);
 
     // Live validation check on typing
@@ -209,6 +211,7 @@ function renderDashboardCards(languages) {
                     <div class="stat-item">Translated: <span class="stat-val">${lang.translated}</span></div>
                     <div class="stat-item">Outdated: <span class="stat-val stat-outdated">${lang.outdated}</span></div>
                     <div class="stat-item">Untranslated: <span class="stat-val stat-untranslated">${lang.untranslated}</span></div>
+                    <div class="stat-item">Orphaned: <span class="stat-val stat-untranslated" style="color:var(--danger);">${lang.orphaned || 0}</span></div>
                     <div class="stat-item">Total: <span class="stat-val">${lang.total}</span></div>
                 </div>
             </div>
@@ -301,7 +304,8 @@ function applySidebarFilters() {
         // Status indicator badge
         const badgeChar = item.status === 'untranslated' ? 'U' :
                           item.status === 'outdated' ? 'O' :
-                          item.status === 'warnings' ? 'W' : 'T';
+                          item.status === 'warnings' ? 'W' :
+                          item.status === 'orphaned' ? 'Ø' : 'T';
                           
         li.innerHTML = `
             <span class="key-text">${item.key}</span>
@@ -373,17 +377,34 @@ function selectKey(key) {
     // Render panels
     el.sourceTextDisplay.textContent = item.source;
     el.translationInput.value = item.translation;
-    el.translationInput.focus();
+    
+    if (item.status === 'orphaned') {
+        el.btnSaveKey.style.display = 'none';
+        el.btnPruneKey.style.display = 'inline-block';
+        el.translationInput.readOnly = true;
+        el.btnCopySource.style.display = 'none';
+        el.suggestionsList.innerHTML = '<div class="suggestion-card loading">Suggestions not available for orphaned keys</div>';
+        
+        // Custom warning message in validation panel
+        updateValidationUI(["This string has been removed from the English source XML file. You can safely prune it to keep your resources clean."]);
+        el.translationInput.focus();
+    } else {
+        el.btnSaveKey.style.display = 'inline-block';
+        el.btnPruneKey.style.display = 'none';
+        el.translationInput.readOnly = false;
+        el.btnCopySource.style.display = 'inline-block';
+        el.translationInput.focus();
+        
+        // Clean suggestions panel
+        el.suggestionsList.innerHTML = '<div class="suggestion-card loading">Fetching suggestions...</div>';
 
-    // Clean suggestions panel
-    el.suggestionsList.innerHTML = '<div class="suggestion-card loading">Fetching suggestions...</div>';
+        // Live validation check on focus load
+        const warnings = runValidation(item.source, item.translation);
+        updateValidationUI(warnings);
 
-    // Live validation check on focus load
-    const warnings = runValidation(item.source, item.translation);
-    updateValidationUI(warnings);
-
-    // Asynchronously query suggestions
-    fetchSuggestions(key, item.source);
+        // Asynchronously query suggestions
+        fetchSuggestions(key, item.source);
+    }
 }
 
 // 3. Auto Suggestions fetching
@@ -610,6 +631,72 @@ function navigateNextAttention() {
         const nextItem = state.filteredStrings[(currIdx + 1) % n];
         selectKey(nextItem.key);
     }
+}
+
+function pruneCurrentTranslation() {
+    if (!confirm(`Are you sure you want to permanently prune the orphaned translation for key "${state.currentKey}"?`)) {
+        return;
+    }
+    
+    el.btnPruneKey.disabled = true;
+    el.btnPruneKey.textContent = "Pruning...";
+    
+    fetch('/api/prune', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            lang: state.activeLang,
+            key: state.currentKey
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        el.btnPruneKey.disabled = false;
+        el.btnPruneKey.textContent = "Prune Translation";
+        
+        if (data.success) {
+            // Remove key locally from the state.strings list
+            state.strings = state.strings.filter(s => s.key !== state.currentKey);
+            applySidebarFilters();
+            
+            // Select next key if matches exist
+            if (state.filteredStrings.length > 0) {
+                selectKey(state.filteredStrings[0].key);
+            } else {
+                // If filter is empty, fallback to another active tab
+                const hasUntranslated = state.strings.some(s => s.status === 'untranslated');
+                const hasOutdated = state.strings.some(s => s.status === 'outdated');
+                if (hasUntranslated) {
+                    state.activeFilter = 'untranslated';
+                } else if (hasOutdated) {
+                    state.activeFilter = 'outdated';
+                } else {
+                    state.activeFilter = 'all';
+                }
+                
+                el.filterTabs.forEach(tab => {
+                    if (tab.dataset.filter === state.activeFilter) tab.classList.add('active');
+                    else tab.classList.remove('active');
+                });
+                
+                applySidebarFilters();
+                if (state.filteredStrings.length > 0) {
+                    selectKey(state.filteredStrings[0].key);
+                } else if (state.strings.length > 0) {
+                    selectKey(state.strings[0].key);
+                }
+            }
+        } else {
+            alert("Error pruning string from disk.");
+        }
+    })
+    .catch(err => {
+        el.btnPruneKey.disabled = false;
+        el.btnPruneKey.textContent = "Prune Translation";
+        alert(`Pruning failed: ${err.message}`);
+    });
 }
 
 // App Initialization Entry

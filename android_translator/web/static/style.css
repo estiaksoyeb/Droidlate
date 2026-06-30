@@ -405,6 +405,7 @@ body {
 .badge-o { background-color: rgba(250, 179, 135, 0.2); color: var(--warning); }
 .badge-w { background-color: rgba(249, 226, 175, 0.2); color: #f9e2af; }
 .badge-t { background-color: rgba(166, 227, 161, 0.2); color: var(--success); }
+.badge-Ø { background-color: rgba(243, 139, 168, 0.2); color: var(--danger); }
 
 /* Right Workspace Editor Panel */
 .editor-workspace {
@@ -452,6 +453,7 @@ body {
 .status-badge.OUTDATED { background-color: var(--warning); color: var(--bg-crust); }
 .status-badge.WARNINGS { background-color: #f9e2af; color: var(--bg-crust); }
 .status-badge.TRANSLATED { background-color: var(--success); color: var(--bg-crust); }
+.status-badge.ORPHANED { background-color: var(--danger); color: var(--bg-crust); }
 
 .comment-block, .attribs-block {
     display: flex;
@@ -665,6 +667,15 @@ body {
 
 .btn-primary:active {
     transform: scale(0.98);
+}
+
+.btn-danger {
+    background-color: var(--danger) !important;
+    color: var(--bg-crust) !important;
+}
+
+.btn-danger:hover {
+    background-color: #fca7a7 !important;
 }
 
 .btn-secondary {

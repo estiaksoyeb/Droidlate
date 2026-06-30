@@ -57,6 +57,14 @@ def run_wizard():
     metadata = load_metadata(target_xml)
     
     metadata_changed = False
+    
+    # Warn about orphaned translation keys
+    orphaned_keys = [k for k in target_entries.keys() if k not in source_entries]
+    if orphaned_keys:
+        print(f"\n[!] Warning: Found {len(orphaned_keys)} orphaned key(s) in translation that no longer exist in English source XML.")
+        print("    Use the Web interface to safely prune them or edit the XML file manually.")
+        
+    # Auto-initialize legacy translations
     for key, entry in source_entries.items():
         if key in target_entries and key not in metadata:
             from .parser.diff_engine import normalize_source_string, compute_source_hash
