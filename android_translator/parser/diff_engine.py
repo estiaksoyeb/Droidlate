@@ -72,12 +72,28 @@ def compute_source_hash(normalized_val: str) -> str:
     """Computes a SHA-256 hash of the normalized source string."""
     return hashlib.sha256(normalized_val.encode('utf-8')).hexdigest()
 
+def get_project_root(path: str) -> str:
+    """Finds the root directory of the Android project by searching upwards."""
+    current = os.path.abspath(path)
+    if os.path.isfile(current):
+        current = os.path.dirname(current)
+        
+    while current and current != os.path.dirname(current):
+        if any(os.path.exists(os.path.join(current, marker)) for marker in ("build.gradle", "build.gradle.kts", "settings.gradle", ".git")):
+            return current
+        current = os.path.dirname(current)
+        
+    # Fallback to parent of target directory
+    return os.path.dirname(os.path.abspath(path))
+
 def get_metadata_path(target_xml_path: str) -> str:
-    """Gets the path to the sidecar metadata file for a target XML."""
-    dir_name = os.path.dirname(target_xml_path)
-    base_name = os.path.basename(target_xml_path)
-    metadata_name = f".{base_name}.metadata.json"
-    return os.path.join(dir_name, metadata_name)
+    """Gets the path to the centralized metadata file for a target XML."""
+    target_abs = os.path.abspath(target_xml_path)
+    project_root = get_project_root(target_abs)
+    
+    locale_folder = os.path.basename(os.path.dirname(target_abs))
+    metadata_dir = os.path.join(project_root, ".translation_metadata")
+    return os.path.join(metadata_dir, f"{locale_folder}.json")
 
 def load_metadata(target_xml_path: str) -> dict:
     """Loads target sidecar metadata JSON file."""

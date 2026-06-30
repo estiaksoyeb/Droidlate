@@ -42,7 +42,7 @@
 
             <!-- 2. EDITOR WORKSPACE VIEW -->
             <section id="editor-view" class="view-section">
-                <div class="editor-layout">
+                <div id="editor-layout-container" class="editor-layout show-sidebar">
                     <!-- Left Sidebar (Navigation & Filtering) -->
                     <aside class="editor-sidebar">
                         <div class="sidebar-header">
@@ -72,6 +72,7 @@
                         <!-- Key Metadata Card -->
                         <div class="metadata-card">
                             <div class="meta-header">
+                                <button id="btn-back-sidebar" class="btn-secondary mobile-only">← Keys</button>
                                 <span id="current-key-name" class="key-name">string:key_name</span>
                                 <span id="current-key-status" class="status-badge">UNTRANSLATED</span>
                             </div>

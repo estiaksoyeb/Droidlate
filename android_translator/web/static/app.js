@@ -16,6 +16,8 @@ const el = {
     editorView: document.getElementById('editor-view'),
     languagesGrid: document.getElementById('languages-grid'),
     btnBackDashboard: document.getElementById('btn-back-dashboard'),
+    btnBackSidebar: document.getElementById('btn-back-sidebar'),
+    editorLayoutContainer: document.getElementById('editor-layout-container'),
     keySearch: document.getElementById('key-search'),
     keysList: document.getElementById('keys-list'),
     currentKeyName: document.getElementById('current-key-name'),
@@ -43,6 +45,12 @@ const el = {
 function setupEventListeners() {
     // Return to dashboard
     el.btnBackDashboard.addEventListener('click', showDashboard);
+
+    // Return to sidebar keys list on mobile
+    el.btnBackSidebar.addEventListener('click', () => {
+        el.editorLayoutContainer.classList.remove('show-workspace');
+        el.editorLayoutContainer.classList.add('show-sidebar');
+    });
 
     // Search and Filter updates
     el.keySearch.addEventListener('input', (e) => {
@@ -92,10 +100,15 @@ function setupEventListeners() {
             }
         }
         
-        // Escape to exit editor
+        // Escape to exit editor / go back to sidebar on mobile
         if (e.key === 'Escape' && state.activeLang) {
             e.preventDefault();
-            showDashboard();
+            if (window.innerWidth < 768 && el.editorLayoutContainer.classList.contains('show-workspace')) {
+                el.editorLayoutContainer.classList.remove('show-workspace');
+                el.editorLayoutContainer.classList.add('show-sidebar');
+            } else {
+                showDashboard();
+            }
         }
 
         // Alt+1, Alt+2, Alt+3 for suggestions pasting
@@ -227,14 +240,33 @@ function showEditor(langFolder) {
         .then(res => res.json())
         .then(data => {
             state.strings = data.strings;
+
+            // Default filter to untranslated, but fallback if empty
+            const untranslatedCount = state.strings.filter(s => s.status === 'untranslated').length;
+            const outdatedCount = state.strings.filter(s => s.status === 'outdated' || s.status === 'warnings').length;
+            
+            if (untranslatedCount > 0) {
+                state.activeFilter = 'untranslated';
+            } else if (outdatedCount > 0) {
+                state.activeFilter = 'outdated';
+            } else {
+                state.activeFilter = 'all';
+            }
+            
+            // Sync filter tabs classes in UI
+            el.filterTabs.forEach(tab => {
+                if (tab.dataset.filter === state.activeFilter) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+
             applySidebarFilters();
             
-            // Select first key that needs attention
-            const firstTodo = state.strings.find(s => s.status !== 'translated');
-            if (firstTodo) {
-                selectKey(firstTodo.key);
-            } else if (state.strings.length > 0) {
-                selectKey(state.strings[0].key);
+            // Select first key that matches the filter
+            if (state.filteredStrings.length > 0) {
+                selectKey(state.filteredStrings[0].key);
             }
         })
         .catch(err => {
@@ -299,6 +331,10 @@ function updateEditorStats() {
 
 function selectKey(key) {
     state.currentKey = key;
+    
+    // Toggle active classes for mobile view
+    el.editorLayoutContainer.classList.remove('show-sidebar');
+    el.editorLayoutContainer.classList.add('show-workspace');
     
     // Highlight active list item
     const items = el.keysList.querySelectorAll('.key-list-item');

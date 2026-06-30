@@ -11,6 +11,7 @@ translation_tool_design.md
 .mrcs/
 .mrcs
 RCS/
+.translation_metadata/
 
 # Ignore Python build/distribution files
 build/

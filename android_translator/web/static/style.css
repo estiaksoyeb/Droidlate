@@ -744,3 +744,69 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--border-color);
 }
+
+/* Mobile-only element styling */
+.mobile-only {
+    display: none !important;
+}
+
+@media (max-width: 768px) {
+    .mobile-only {
+        display: inline-block !important;
+    }
+    
+    /* Layout toggles for editor on mobile */
+    .editor-layout {
+        position: relative;
+        flex-direction: column;
+    }
+    
+    .editor-sidebar {
+        width: 100% !important;
+        height: 100%;
+        display: none;
+    }
+    
+    .editor-workspace {
+        width: 100% !important;
+        height: 100%;
+        display: none;
+        padding: 16px;
+    }
+    
+    /* Active state controls */
+    .editor-layout.show-sidebar .editor-sidebar {
+        display: flex;
+    }
+    
+    .editor-layout.show-workspace .editor-workspace {
+        display: flex;
+    }
+
+    /* Smaller spacing/layouts on mobile */
+    .languages-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .lang-card {
+        padding: 16px;
+    }
+
+    .metadata-card, .fields-card {
+        padding: 16px;
+    }
+    
+    .app-status-bar {
+        padding: 0 16px;
+    }
+    
+    .status-center {
+        width: 150px;
+    }
+    
+    /* suggestions layout */
+    .suggestions-list {
+        grid-template-columns: 1fr;
+    }
+}
+
