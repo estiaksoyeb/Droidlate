@@ -26,18 +26,27 @@
 
 ## Installation
 
-To install Droidlate locally in edit mode:
+The recommended way to install Droidlate is globally using [pipx](https://github.com/pypa/pipx):
+
+```bash
+pipx install droidlate
+```
+
+Alternatively, you can install it using standard `pip`:
+
+```bash
+pip install droidlate
+```
+
+### Local Development
+
+If you want to run it from source or install in editable mode:
 
 ```bash
 # Clone the repository and install dependencies
 git clone https://github.com/estiaksoyeb/Droidlate.git
 cd Droidlate
 pip install -e .
-```
-
-Alternatively, install requirements directly:
-```bash
-pip install -r requirements.txt
 ```
 
 ---

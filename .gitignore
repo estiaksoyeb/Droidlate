@@ -15,6 +15,7 @@ RCS/
 
 # Ignore Python build/distribution files
 build/
+dist/
 droidlate.egg-info/
 android_translator.egg-info/
 
