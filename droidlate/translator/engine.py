@@ -1,8 +1,8 @@
 import os
 import re
 from typing import List, Tuple
-from .apis import TranslationProvider, GoogleTranslateProvider, MyMemoryProvider, DeepLProvider, GeminiProvider, OpenAIProvider
-from ..config import get_deepl_api_key, is_deepl_free_api, get_gemini_api_key, get_openai_api_key
+from .apis import TranslationProvider, GoogleTranslateProvider, MyMemoryProvider, DeepLProvider
+from ..config import get_deepl_api_key, is_deepl_free_api
 
 def android_locale_to_iso(folder_name: str) -> str:
     """
@@ -28,10 +28,6 @@ def android_locale_to_iso(folder_name: str) -> str:
 class TranslationOrchestrator:
     """Orchestrates suggestions from multiple TranslationProvider instances."""
     def __init__(self):
-        self.reload_providers()
-        
-    def reload_providers(self):
-        """Reloads providers based on the latest global config settings."""
         self.providers: List[TranslationProvider] = [
             GoogleTranslateProvider(),
             MyMemoryProvider()
@@ -41,16 +37,6 @@ class TranslationOrchestrator:
         deepl_key = get_deepl_api_key()
         if deepl_key:
             self.providers.append(DeepLProvider(deepl_key, is_deepl_free_api()))
-
-        # Load Gemini if API key is provided
-        gemini_key = get_gemini_api_key()
-        if gemini_key:
-            self.providers.append(GeminiProvider(gemini_key))
-
-        # Load OpenAI if API key is provided
-        openai_key = get_openai_api_key()
-        if openai_key:
-            self.providers.append(OpenAIProvider(openai_key))
 
     def get_suggestions(self, text: str, source_lang: str, target_lang: str) -> List[Tuple[str, str]]:
         """
