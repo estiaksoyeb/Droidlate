@@ -686,7 +686,11 @@ function saveCurrentTranslation() {
         if (data.success) {
             // Update local status representation
             activeStr.translation = value;
-            activeStr.status = warnings.length > 0 ? 'warnings' : 'translated';
+            if (!value.trim()) {
+                activeStr.status = 'untranslated';
+            } else {
+                activeStr.status = warnings.length > 0 ? 'warnings' : 'translated';
+            }
             
             // Reapply filters to update sidebar list elements
             applySidebarFilters();

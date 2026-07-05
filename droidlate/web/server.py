@@ -3,7 +3,7 @@ import re
 from flask import Flask, request, jsonify, send_from_directory
 from typing import Optional
 
-from ..parser.xml_parser import parse_strings_xml, write_string_translation
+from ..parser.xml_parser import parse_strings_xml, write_string_translation, remove_string_translation
 from ..parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, rebuild_tm_cache, get_tm_suggestion, prune_nontranslatable_strings
 from ..translator.engine import TranslationOrchestrator
 
@@ -300,11 +300,23 @@ def save_translation():
             }), 409
     
     # Write translation to XML
-    success = write_string_translation(tgt_path, key, value, src_entry.attrib)
-    
-    # Update sidecar metadata hash
-    update_metadata_entry(tgt_path, key, src_entry.value, value)
-    
+    if value is None or not value.strip():
+        success = True
+        if os.path.exists(tgt_path):
+            remove_string_translation(tgt_path, key)
+            
+        # Remove from sidecar metadata
+        from ..parser.diff_engine import load_metadata, save_metadata
+        metadata = load_metadata(tgt_path)
+        if key in metadata:
+            del metadata[key]
+            save_metadata(tgt_path, metadata)
+    else:
+        success = write_string_translation(tgt_path, key, value, src_entry.attrib)
+        
+        # Update sidecar metadata hash
+        update_metadata_entry(tgt_path, key, src_entry.value, value)
+        
     return jsonify({"success": success})
 
 @app.route('/api/suggest', methods=['GET'])
