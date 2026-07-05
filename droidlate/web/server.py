@@ -357,6 +357,32 @@ def prune_string():
         
     return jsonify({"success": success})
 
+@app.route('/api/settings', methods=['GET'])
+def get_settings_endpoint():
+    """Returns the current translation configuration settings."""
+    from ..config import load_settings
+    settings = load_settings()
+    return jsonify({
+        "DEEPL_API_KEY": settings.get("DEEPL_API_KEY", ""),
+        "DEEPL_FREE_API": settings.get("DEEPL_FREE_API", True),
+        "GEMINI_API_KEY": settings.get("GEMINI_API_KEY", ""),
+        "OPENAI_API_KEY": settings.get("OPENAI_API_KEY", "")
+    })
+
+@app.route('/api/settings', methods=['POST'])
+def save_settings_endpoint():
+    """Saves the new translation configuration settings and reloads the orchestrator."""
+    from ..config import save_settings
+    data = request.json or {}
+    save_settings({
+        "DEEPL_API_KEY": data.get("DEEPL_API_KEY", "").strip(),
+        "DEEPL_FREE_API": bool(data.get("DEEPL_FREE_API", True)),
+        "GEMINI_API_KEY": data.get("GEMINI_API_KEY", "").strip(),
+        "OPENAI_API_KEY": data.get("OPENAI_API_KEY", "").strip()
+    })
+    orchestrator.reload_providers()
+    return jsonify({"success": True})
+
 def start_web_server(res_dir=None, source_xml=None, target_xml=None, port=5000):
     """Initializes server context and launches the Flask web service."""
     global RES_DIR, SOURCE_XML, TARGET_XML, IS_SINGLE_FILE_MODE

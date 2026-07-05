@@ -17,8 +17,11 @@
             <div class="header-left">
                 <h1>Droidlate</h1>
             </div>
-            <div class="header-right">
+            <div class="header-right" style="display: flex; align-items: center; gap: 12px;">
                 <span id="project-path-display" class="project-path">Loading project...</span>
+                <button id="btn-settings" class="btn-secondary" title="API Settings">
+                    <span style="font-size: 14px; margin-right: 4px;">⚙</span> Settings
+                </button>
             </div>
         </header>
 
@@ -152,8 +155,43 @@
                 Locales: 0
             </div>
         </footer>
-    </div>
+        <!-- Settings Modal Overlay -->
+        <div id="settings-modal" class="modal-overlay" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>API Provider Settings</h3>
+                    <button id="btn-close-settings" class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="settings-form">
+                        <div class="form-group">
+                            <label for="gemini-api-key">Gemini API Key</label>
+                            <input type="password" id="gemini-api-key" placeholder="Enter Gemini API key...">
+                            <span class="field-help">Used for context-aware machine translation suggestions using gemini-1.5-flash.</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="openai-api-key">OpenAI API Key</label>
+                            <input type="password" id="openai-api-key" placeholder="Enter OpenAI API key...">
+                            <span class="field-help">Used for context-aware machine translation suggestions using gpt-4o-mini.</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="deepl-api-key">DeepL API Key</label>
+                            <input type="password" id="deepl-api-key" placeholder="Enter DeepL API key...">
+                            <span class="field-help">Used for translation suggestions using DeepL translate.</span>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="deepl-free-api">
+                            <label for="deepl-free-api">Use DeepL Free API Endpoint</label>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" id="btn-cancel-settings" class="btn-secondary">Cancel</button>
+                            <button type="submit" id="btn-save-settings" class="btn-primary">Save Settings</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
 
-    <script src="/app.js"></script>
-</body>
+        <script src="/app.js"></script>
+    </body>
 </html>

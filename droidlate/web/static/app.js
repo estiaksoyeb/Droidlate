@@ -39,7 +39,16 @@ const el = {
     statusBarProgressFill: document.getElementById('status-progress-fill'),
     statusBarProgressLabel: document.getElementById('status-progress-label'),
     statusBarRight: document.getElementById('status-right'),
-    filterTabs: document.querySelectorAll('.filter-tab')
+    filterTabs: document.querySelectorAll('.filter-tab'),
+    btnSettings: document.getElementById('btn-settings'),
+    settingsModal: document.getElementById('settings-modal'),
+    btnCloseSettings: document.getElementById('btn-close-settings'),
+    btnCancelSettings: document.getElementById('btn-cancel-settings'),
+    settingsForm: document.getElementById('settings-form'),
+    geminiApiKeyInput: document.getElementById('gemini-api-key'),
+    openaiApiKeyInput: document.getElementById('openai-api-key'),
+    deeplApiKeyInput: document.getElementById('deepl-api-key'),
+    deeplFreeApiInput: document.getElementById('deepl-free-api')
 };
 
 // Formatting helpers for plurals/arrays keys
@@ -69,6 +78,12 @@ function formatKeyNamePlainText(key) {
 function setupEventListeners() {
     // Return to dashboard
     el.btnBackDashboard.addEventListener('click', showDashboard);
+
+    // Settings modal triggers
+    el.btnSettings.addEventListener('click', openSettingsModal);
+    el.btnCloseSettings.addEventListener('click', closeSettingsModal);
+    el.btnCancelSettings.addEventListener('click', closeSettingsModal);
+    el.settingsForm.addEventListener('submit', saveSettings);
 
     // Return to sidebar keys list on mobile
     el.btnBackSidebar.addEventListener('click', () => {
@@ -153,6 +168,68 @@ function setupEventListeners() {
                 }
             }
         }
+    });
+}
+
+function openSettingsModal() {
+    fetch('/api/settings')
+        .then(res => res.json())
+        .then(data => {
+            el.geminiApiKeyInput.value = data.GEMINI_API_KEY || '';
+            el.openaiApiKeyInput.value = data.OPENAI_API_KEY || '';
+            el.deeplApiKeyInput.value = data.DEEPL_API_KEY || '';
+            el.deeplFreeApiInput.checked = !!data.DEEPL_FREE_API;
+            el.settingsModal.style.display = 'flex';
+        })
+        .catch(err => {
+            alert('Failed to load API settings');
+        });
+}
+
+function closeSettingsModal() {
+    el.settingsModal.style.display = 'none';
+}
+
+function saveSettings(e) {
+    e.preventDefault();
+    const saveBtn = document.getElementById('btn-save-settings');
+    const oldText = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    fetch('/api/settings', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            GEMINI_API_KEY: el.geminiApiKeyInput.value.trim(),
+            OPENAI_API_KEY: el.openaiApiKeyInput.value.trim(),
+            DEEPL_API_KEY: el.deeplApiKeyInput.value.trim(),
+            DEEPL_FREE_API: el.deeplFreeApiInput.checked
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = oldText;
+        if (data.success) {
+            closeSettingsModal();
+            if (state.currentKey) {
+                const activeStr = state.strings.find(s => s.key === state.currentKey);
+                if (activeStr && activeStr.status !== 'orphaned') {
+                    el.suggestionsList.innerHTML = '<div class="suggestion-card loading">Refreshing suggestions...</div>';
+                    fetchSuggestions(state.currentKey, activeStr.source);
+                }
+            }
+        } else {
+            alert('Failed to save settings');
+        }
+    })
+    .catch(err => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = oldText;
+        alert('Error saving settings: ' + err.message);
     });
 }
 
