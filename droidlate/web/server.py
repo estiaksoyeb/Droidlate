@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from typing import Optional
 
 from ..parser.xml_parser import parse_strings_xml, write_string_translation
-from ..parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, rebuild_tm_cache, get_tm_suggestion
+from ..parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, rebuild_tm_cache, get_tm_suggestion, prune_nontranslatable_strings
 from ..translator.engine import TranslationOrchestrator
 
 # Initialize Flask app
@@ -33,6 +33,8 @@ def get_project():
         # Single-file translation mode
         source_entries = parse_strings_xml(SOURCE_XML)
         target_entries = parse_strings_xml(TARGET_XML) if os.path.exists(TARGET_XML) else {}
+        if prune_nontranslatable_strings(TARGET_XML, source_entries, target_entries):
+            target_entries = parse_strings_xml(TARGET_XML)
         metadata = load_metadata(TARGET_XML)
         rebuild_tm_cache(TARGET_XML, source_entries, target_entries)
         
@@ -50,7 +52,8 @@ def get_project():
             from ..parser.diff_engine import save_metadata
             save_metadata(TARGET_XML, metadata)
             
-        total = len(source_entries)
+        translatable_keys = [k for k, entry in source_entries.items() if entry.attrib.get('translatable') != 'false']
+        total = len(translatable_keys)
         untranslated = 0
         outdated = 0
         translated = 0
@@ -59,16 +62,18 @@ def get_project():
         for key, entry in source_entries.items():
             tgt_val = target_entries.get(key).value if key in target_entries else None
             meta_val = metadata.get(key)
-            status = categorize_key(key, entry.value, tgt_val, meta_val)
+            status = categorize_key(key, entry.value, tgt_val, meta_val, entry.attrib)
             
-            if status == "untranslated":
+            if status == "readonly":
+                continue
+            elif status == "untranslated":
                 untranslated += 1
             elif status in ("outdated", "warnings"):
                 outdated += 1
             else:
                 translated += 1
                 
-        progress = int((translated / total) * 100) if total > 0 else 0
+        progress = int((translated / total) * 100) if total > 0 else 100
         folder = os.path.basename(os.path.dirname(TARGET_XML))
         locale = folder.replace("values-", "") or "default"
         
@@ -107,6 +112,8 @@ def get_project():
             if os.path.isdir(folder_path) and match:
                 target_xml = os.path.join(folder_path, "strings.xml")
                 target_entries = parse_strings_xml(target_xml) if os.path.exists(target_xml) else {}
+                if prune_nontranslatable_strings(target_xml, source_entries, target_entries):
+                    target_entries = parse_strings_xml(target_xml)
                 metadata = load_metadata(target_xml)
                 rebuild_tm_cache(target_xml, source_entries, target_entries)
                 
@@ -124,6 +131,8 @@ def get_project():
                     from ..parser.diff_engine import save_metadata
                     save_metadata(target_xml, metadata)
                 
+                translatable_keys = [k for k, entry in source_entries.items() if entry.attrib.get('translatable') != 'false']
+                total_keys = len(translatable_keys)
                 untranslated = 0
                 outdated = 0
                 translated = 0
@@ -132,16 +141,18 @@ def get_project():
                 for key, entry in source_entries.items():
                     tgt_val = target_entries.get(key).value if key in target_entries else None
                     meta_val = metadata.get(key)
-                    status = categorize_key(key, entry.value, tgt_val, meta_val)
+                    status = categorize_key(key, entry.value, tgt_val, meta_val, entry.attrib)
                     
-                    if status == "untranslated":
+                    if status == "readonly":
+                        continue
+                    elif status == "untranslated":
                         untranslated += 1
                     elif status in ("outdated", "warnings"):
                         outdated += 1
                     else:
                         translated += 1
                         
-                progress = int((translated / total_keys) * 100) if total_keys > 0 else 0
+                progress = int((translated / total_keys) * 100) if total_keys > 0 else 100
                 locale = folder.replace("values-", "")
                 
                 languages_list.append({
@@ -184,6 +195,8 @@ def get_strings():
         
     source_entries = parse_strings_xml(src_path)
     target_entries = parse_strings_xml(tgt_path) if os.path.exists(tgt_path) else {}
+    if prune_nontranslatable_strings(tgt_path, source_entries, target_entries):
+        target_entries = parse_strings_xml(tgt_path)
     metadata = load_metadata(tgt_path)
     rebuild_tm_cache(tgt_path, source_entries, target_entries)
     
@@ -211,7 +224,7 @@ def get_strings():
     for key, entry in source_entries.items():
         tgt_val = target_entries.get(key).value if key in target_entries else None
         meta_val = metadata.get(key)
-        status = categorize_key(key, entry.value, tgt_val, meta_val)
+        status = categorize_key(key, entry.value, tgt_val, meta_val, entry.attrib)
         
         current_norm = normalize_source_string(entry.value)
         src_hash = compute_source_hash(current_norm)

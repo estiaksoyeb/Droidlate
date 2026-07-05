@@ -328,6 +328,7 @@ function applySidebarFilters() {
         const badgeChar = item.status === 'untranslated' ? 'U' :
                           item.status === 'outdated' ? 'O' :
                           item.status === 'warnings' ? 'W' :
+                          item.status === 'readonly' ? 'R' :
                           item.status === 'orphaned' ? 'Ø' : 'T';
                           
         li.innerHTML = `
@@ -401,14 +402,21 @@ function selectKey(key) {
     el.sourceTextDisplay.textContent = item.source;
     el.translationInput.value = item.translation;
     
-    if (item.status === 'orphaned') {
+    if (item.status === 'readonly') {
+        el.btnSaveKey.style.display = 'none';
+        el.btnPruneKey.style.display = 'none';
+        el.translationInput.readOnly = true;
+        el.btnCopySource.style.display = 'inline-block';
+        el.suggestionsList.innerHTML = '<div class="suggestion-card loading">Suggestions not available for read-only keys</div>';
+        
+        updateValidationUI(["This string is marked as non-translatable (translatable=\"false\") in strings.xml and remains read-only."]);
+    } else if (item.status === 'orphaned') {
         el.btnSaveKey.style.display = 'none';
         el.btnPruneKey.style.display = 'inline-block';
         el.translationInput.readOnly = true;
         el.btnCopySource.style.display = 'none';
         el.suggestionsList.innerHTML = '<div class="suggestion-card loading">Suggestions not available for orphaned keys</div>';
         
-        // Custom warning message in validation panel
         updateValidationUI(["This string has been removed from the English source XML file. You can safely prune it to keep your resources clean."]);
         el.translationInput.focus();
     } else {
@@ -636,12 +644,22 @@ function updateValidationUI(warnings) {
     
     if (warnings.length === 0) {
         el.validationPanel.classList.remove('invalid');
+        el.validationPanel.classList.remove('info');
         el.validationIcon.textContent = '✓';
         el.validationSummary.textContent = 'Validation checks passed';
     } else {
-        el.validationPanel.classList.add('invalid');
-        el.validationIcon.textContent = '✗';
-        el.validationSummary.textContent = `${warnings.length} QA warning${warnings.length > 1 ? 's' : ''} found:`;
+        const isReadOnly = state.strings.find(s => s.key === state.currentKey)?.status === 'readonly';
+        if (isReadOnly) {
+            el.validationPanel.classList.remove('invalid');
+            el.validationPanel.classList.add('info');
+            el.validationIcon.textContent = 'ℹ';
+            el.validationSummary.textContent = 'Non-translatable resource:';
+        } else {
+            el.validationPanel.classList.remove('info');
+            el.validationPanel.classList.add('invalid');
+            el.validationIcon.textContent = '✗';
+            el.validationSummary.textContent = `${warnings.length} QA warning${warnings.length > 1 ? 's' : ''} found:`;
+        }
         
         warnings.forEach(warn => {
             const li = document.createElement('li');

@@ -203,11 +203,16 @@ def categorize_key(
     key: str,
     source_val: str,
     target_val: str | None,
-    metadata_entry: dict | None
+    metadata_entry: dict | None,
+    attrib: dict | None = None
 ) -> str:
     """
-    Categorizes a translation key as 'untranslated', 'warnings', 'outdated', or 'translated'.
+    Categorizes a translation key as 'readonly', 'untranslated', 'warnings', 'outdated', or 'translated'.
     """
+    # 0. Read-only check (translatable="false")
+    if attrib and attrib.get('translatable') == 'false':
+        return 'readonly'
+
     # 1. Untranslated check
     if target_val is None:
         return 'untranslated'
@@ -287,3 +292,39 @@ def rebuild_tm_cache(target_xml_path: str, source_entries: dict, target_entries:
                 changed = True
     if changed:
         save_tm(target_xml_path, tm)
+
+def prune_nontranslatable_strings(target_path: str, source_entries: dict, target_entries: dict) -> bool:
+    """
+    Finds target entries that are marked translatable="false" in source_entries,
+    and automatically prunes them from target XML and metadata sidecars.
+    Returns True if any changes were made.
+    """
+    from .xml_parser import remove_string_translation
+    
+    changed = False
+    metadata = None
+    
+    # We copy keys to avoid modifying dict while iterating
+    source_keys = list(source_entries.keys())
+    for key in source_keys:
+        if key in source_entries:
+            entry = source_entries[key]
+            if entry.attrib.get('translatable') == 'false':
+                if key in target_entries:
+                    # Remove from target XML file
+                    remove_string_translation(target_path, key)
+                    # Remove from target_entries dict
+                    del target_entries[key]
+                    
+                    # Remove from metadata sidecar
+                    if metadata is None:
+                        metadata = load_metadata(target_path)
+                    if key in metadata:
+                        del metadata[key]
+                        
+                    changed = True
+                
+    if changed and metadata is not None:
+        save_metadata(target_path, metadata)
+        
+    return changed
