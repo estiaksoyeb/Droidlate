@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "droidlate"
-version = "1.1.2"
+version = "1.2.0"
 description = "Droidlate: A local web-based Weblate-like UI for managing and editing Android strings.xml translations."
 readme = "README.md"
 requires-python = ">=3.8"
