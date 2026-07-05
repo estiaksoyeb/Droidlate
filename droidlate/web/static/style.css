@@ -397,6 +397,34 @@ body {
     margin-right: 12px;
 }
 
+.key-type-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 4px;
+    border-radius: 3px;
+    margin-right: 6px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.key-type-label.plural {
+    background-color: rgba(137, 220, 235, 0.2);
+    color: var(--info);
+}
+
+.key-type-label.array {
+    background-color: rgba(166, 227, 161, 0.2);
+    color: var(--success);
+}
+
+.key-sub-label {
+    color: var(--text-dim);
+    font-size: 11px;
+    font-style: italic;
+    margin-left: 4px;
+}
+
 .key-status-dot {
     font-size: 10px;
     font-weight: 700;

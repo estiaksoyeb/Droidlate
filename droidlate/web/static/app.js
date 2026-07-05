@@ -42,6 +42,29 @@ const el = {
     filterTabs: document.querySelectorAll('.filter-tab')
 };
 
+// Formatting helpers for plurals/arrays keys
+function formatKeyName(key) {
+    if (key.includes('#plural#')) {
+        const parts = key.split('#plural#');
+        return `<span class="key-type-label plural">plural</span> <span class="key-base">${parts[0]}</span> <span class="key-sub-label">(${parts[1]})</span>`;
+    } else if (key.includes('#array#')) {
+        const parts = key.split('#array#');
+        return `<span class="key-type-label array">array</span> <span class="key-base">${parts[0]}</span> <span class="key-sub-label">[${parts[1]}]</span>`;
+    }
+    return `<span class="key-base">${key}</span>`;
+}
+
+function formatKeyNamePlainText(key) {
+    if (key.includes('#plural#')) {
+        const parts = key.split('#plural#');
+        return `plural: ${parts[0]} (${parts[1]})`;
+    } else if (key.includes('#array#')) {
+        const parts = key.split('#array#');
+        return `array: ${parts[0]} [${parts[1]}]`;
+    }
+    return `string: ${key}`;
+}
+
 // Setup Event Listeners
 function setupEventListeners() {
     // Return to dashboard
@@ -308,7 +331,7 @@ function applySidebarFilters() {
                           item.status === 'orphaned' ? 'Ø' : 'T';
                           
         li.innerHTML = `
-            <span class="key-text">${item.key}</span>
+            <span class="key-text">${formatKeyName(item.key)}</span>
             <span class="key-status-dot badge-${badgeChar}">${badgeChar}</span>
         `;
         
@@ -354,7 +377,7 @@ function selectKey(key) {
     if (!item) return;
 
     // Render metadata card
-    el.currentKeyName.textContent = `string:${item.key}`;
+    el.currentKeyName.textContent = formatKeyNamePlainText(item.key);
     el.currentKeyStatus.textContent = item.status.toUpperCase();
     el.currentKeyStatus.className = `status-badge ${item.status.toUpperCase()}`;
     
