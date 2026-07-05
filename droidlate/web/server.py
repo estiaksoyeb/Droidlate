@@ -370,6 +370,15 @@ def prune_string():
         
     return jsonify({"success": success})
 
+@app.route('/api/update', methods=['GET'])
+def check_update_endpoint():
+    """Checks if there is a new update available and returns info."""
+    from ..update_checker import check_for_updates
+    res = check_for_updates()
+    if res and res.get("update_available"):
+        return jsonify(res)
+    return jsonify({"update_available": False})
+
 def start_web_server(res_dir=None, source_xml=None, target_xml=None, port=5000):
     """Initializes server context and launches the Flask web service."""
     global RES_DIR, SOURCE_XML, TARGET_XML, IS_SINGLE_FILE_MODE

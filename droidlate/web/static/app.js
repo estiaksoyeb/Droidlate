@@ -174,6 +174,23 @@ function showDashboard() {
         </div>
     `;
 
+    // Query for Droidlate updates
+    fetch('/api/update')
+        .then(res => res.json())
+        .then(data => {
+            const banner = document.getElementById('update-banner');
+            if (data && data.update_available) {
+                const text = document.getElementById('update-banner-text');
+                text.innerHTML = `🚀 A new version of Droidlate is available: <strong>${data.current_version}</strong> → <strong>${data.latest_version}</strong>. Run <code>pipx upgrade droidlate</code> or <code>pip install --upgrade droidlate</code> to update.`;
+                banner.style.display = 'flex';
+            } else {
+                banner.style.display = 'none';
+            }
+        })
+        .catch(err => {
+            // Ignore failures silently in UI
+        });
+
     fetch('/api/project')
         .then(res => res.json())
         .then(data => {

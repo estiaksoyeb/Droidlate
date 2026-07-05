@@ -37,6 +37,26 @@ def open_browser_after_delay(url: str, delay: float = 0.5):
         webbrowser.open(url)
     threading.Thread(target=target, daemon=True).start()
 
+def check_updates_background():
+    """Runs version check in a background daemon thread to avoid blocking startup."""
+    import threading
+    import time
+    def target():
+        # Delay check slightly to let server logs print first
+        time.sleep(1.5)
+        try:
+            from .update_checker import check_for_updates
+            res = check_for_updates()
+            if res and res.get("update_available"):
+                print("\n" + "="*65)
+                print(f"✨ A new version of Droidlate is available: {res['current_version']} → {res['latest_version']}")
+                print("👉 Update with: pipx upgrade droidlate (or pip install --upgrade droidlate)")
+                print("="*65 + "\n")
+        except Exception:
+            pass
+            
+    threading.Thread(target=target, daemon=True).start()
+
 def main():
     parser = argparse.ArgumentParser(
         description="Droidlate — A local web-based Weblate-like UI for Android strings.xml translations"
@@ -70,6 +90,7 @@ def main():
     )
 
     args = parser.parse_args()
+    check_updates_background()
     url = f"http://127.0.0.1:{args.port}"
 
     # 1. Check for single-file mode
