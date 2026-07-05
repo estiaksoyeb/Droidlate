@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from typing import Optional
 
 from ..parser.xml_parser import parse_strings_xml, write_string_translation
-from ..parser.diff_engine import load_metadata, update_metadata_entry, categorize_key
+from ..parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, rebuild_tm_cache, get_tm_suggestion
 from ..translator.engine import TranslationOrchestrator
 
 # Initialize Flask app
@@ -34,6 +34,7 @@ def get_project():
         source_entries = parse_strings_xml(SOURCE_XML)
         target_entries = parse_strings_xml(TARGET_XML) if os.path.exists(TARGET_XML) else {}
         metadata = load_metadata(TARGET_XML)
+        rebuild_tm_cache(TARGET_XML, source_entries, target_entries)
         
         metadata_changed = False
         for key, entry in source_entries.items():
@@ -107,6 +108,7 @@ def get_project():
                 target_xml = os.path.join(folder_path, "strings.xml")
                 target_entries = parse_strings_xml(target_xml) if os.path.exists(target_xml) else {}
                 metadata = load_metadata(target_xml)
+                rebuild_tm_cache(target_xml, source_entries, target_entries)
                 
                 metadata_changed = False
                 for key, entry in source_entries.items():
@@ -183,6 +185,7 @@ def get_strings():
     source_entries = parse_strings_xml(src_path)
     target_entries = parse_strings_xml(tgt_path) if os.path.exists(tgt_path) else {}
     metadata = load_metadata(tgt_path)
+    rebuild_tm_cache(tgt_path, source_entries, target_entries)
     
     metadata_changed = False
     
@@ -294,7 +297,7 @@ def save_translation():
 @app.route('/api/suggest', methods=['GET'])
 def get_suggestion():
     """Fetches suggestions from translation providers."""
-    global RES_DIR, SOURCE_XML, TARGET_XML, IS_SINGLE_MODE
+    global RES_DIR, SOURCE_XML, TARGET_XML, IS_SINGLE_FILE_MODE
     
     text = request.args.get('text', '')
     src = request.args.get('src', 'values')
@@ -303,9 +306,21 @@ def get_suggestion():
     if not text or not tgt:
         return jsonify({"suggestions": []})
         
+    if IS_SINGLE_FILE_MODE:
+        tgt_path = TARGET_XML
+    else:
+        tgt_path = os.path.join(RES_DIR, tgt, "strings.xml")
+        
+    tm_sug = get_tm_suggestion(tgt_path, text)
+    res = []
+    if tm_sug:
+        res.append({"provider": "Local TM", "text": tm_sug})
+        
     suggestions = orchestrator.get_suggestions(text, src, tgt)
-    
-    res = [{"provider": name, "text": val} for name, val in suggestions]
+    for name, val in suggestions:
+        if val != tm_sug:
+            res.append({"provider": name, "text": val})
+            
     return jsonify({"suggestions": res})
 
 @app.route('/api/prune', methods=['POST'])

@@ -186,7 +186,7 @@ def save_metadata(target_xml_path: str, metadata: dict) -> None:
         pass
 
 def update_metadata_entry(target_xml_path: str, key: str, source_value: str, translated_value: str) -> None:
-    """Updates a single key's metadata entry."""
+    """Updates a single key's metadata entry and records it in Translation Memory."""
     metadata = load_metadata(target_xml_path)
     norm_src = normalize_source_string(source_value)
     src_hash = compute_source_hash(norm_src)
@@ -195,6 +195,9 @@ def update_metadata_entry(target_xml_path: str, key: str, source_value: str, tra
         "translated_value": translated_value
     }
     save_metadata(target_xml_path, metadata)
+    
+    # Record mapping in Translation Memory
+    update_tm_entry(target_xml_path, source_value, translated_value)
 
 def categorize_key(
     key: str,
@@ -226,3 +229,61 @@ def categorize_key(
         return 'outdated'
 
     return 'translated'
+
+def get_tm_path(target_xml_path: str) -> str:
+    """Gets the path to the translation memory JSON file for a target XML."""
+    target_abs = os.path.abspath(target_xml_path)
+    project_root = get_project_root(target_abs)
+    locale_folder = os.path.basename(os.path.dirname(target_abs))
+    metadata_dir = os.path.join(project_root, ".translation_metadata")
+    return os.path.join(metadata_dir, f"tm_{locale_folder}.json")
+
+def load_tm(target_xml_path: str) -> dict:
+    """Loads target Translation Memory JSON ledger."""
+    path = get_tm_path(target_xml_path)
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_tm(target_xml_path: str, tm: dict) -> None:
+    """Saves Translation Memory ledger to file."""
+    path = get_tm_path(target_xml_path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(tm, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def update_tm_entry(target_xml_path: str, source_value: str, translated_value: str) -> None:
+    """Adds or updates a translation memory mapping for a given source string."""
+    if not source_value.strip() or not translated_value.strip():
+        return
+    tm = load_tm(target_xml_path)
+    norm_src = normalize_source_string(source_value)
+    tm[norm_src] = translated_value
+    save_tm(target_xml_path, tm)
+
+def get_tm_suggestion(target_xml_path: str, source_value: str) -> str | None:
+    """Retrieves a translation suggestion from local TM if available."""
+    tm = load_tm(target_xml_path)
+    norm_src = normalize_source_string(source_value)
+    return tm.get(norm_src)
+
+def rebuild_tm_cache(target_xml_path: str, source_entries: dict, target_entries: dict) -> None:
+    """Rebuilds/Syncs the translation memory cache from current file states."""
+    tm = load_tm(target_xml_path)
+    changed = False
+    for key, entry in source_entries.items():
+        if key in target_entries:
+            norm_src = normalize_source_string(entry.value)
+            tgt_val = target_entries[key].value
+            if tgt_val and tm.get(norm_src) != tgt_val:
+                tm[norm_src] = tgt_val
+                changed = True
+    if changed:
+        save_tm(target_xml_path, tm)
