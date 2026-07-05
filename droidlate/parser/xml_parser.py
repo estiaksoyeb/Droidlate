@@ -319,6 +319,10 @@ def write_string_translation(target_path: str, key: str, value: str, attrib: dic
     with open(target_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
+    # If the file is empty, contains only whitespace, or doesn't have a valid resources closing tag, reinitialize content
+    if not content.strip() or '</resources>' not in content:
+        content = '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n'
+
     # 2. Check if the key exists using a line/column-accurate parser
     item_positions, parent_positions = parse_xml_positions(content)
     

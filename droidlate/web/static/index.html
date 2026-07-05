@@ -27,8 +27,11 @@
             <!-- 1. DASHBOARD VIEW -->
             <section id="dashboard-view" class="view-section active">
                 <div class="view-header">
-                    <h2>Translation Dashboard</h2>
-                    <p class="subtitle">Select a target language to start reviewing and editing translations</p>
+                    <div>
+                        <h2>Translation Dashboard</h2>
+                        <p class="subtitle">Select a target language to start reviewing and editing translations</p>
+                    </div>
+                    <button id="btn-add-language" class="btn-primary" style="display: none;">+ Add Language</button>
                 </div>
                 <!-- Update Notification Banner -->
                 <div id="update-banner" class="update-banner" style="display: none;">
@@ -158,6 +161,30 @@
                 Locales: 0
             </div>
         </footer>
+    </div>
+
+    <!-- Add Language Modal -->
+    <div id="add-language-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Language Locale</h3>
+                <button id="modal-close" class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    Enter the language/locale code. E.g., <code>es</code> for Spanish, <code>fr</code> for French, or <code>zh-rCN</code> for Simplified Chinese.
+                </p>
+                <div class="form-group">
+                    <label for="locale-input">Locale Code</label>
+                    <input type="text" id="locale-input" placeholder="e.g. es, zh-rCN, pt-rBR">
+                </div>
+                <div id="modal-error-message" class="modal-error" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancel-modal" class="btn-secondary">Cancel</button>
+                <button id="btn-confirm-modal" class="btn-primary">Add Language</button>
+            </div>
+        </div>
     </div>
 
     <script src="/app.js"></script>

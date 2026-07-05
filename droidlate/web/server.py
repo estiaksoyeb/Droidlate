@@ -257,6 +257,37 @@ def get_strings():
         "strings": strings_list
     })
 
+@app.route('/api/languages', methods=['POST'])
+def add_language():
+    """Creates a new language resource directory (e.g. values-es) and initializes strings.xml."""
+    global RES_DIR, IS_SINGLE_FILE_MODE
+    
+    if IS_SINGLE_FILE_MODE:
+        return jsonify({"error": "Cannot add languages in single-file mode."}), 400
+        
+    data = request.json or {}
+    locale = data.get('locale')
+    if not locale:
+        return jsonify({"error": "Missing locale code."}), 400
+        
+    locale = locale.strip()
+    # Validate locale pattern: standard ISO codes like es, zh, zh-rCN, values-xx compatible
+    if not re.match(r"^[a-z]{2,3}(?:-r[a-zA-Z]{2,4})?$", locale):
+        return jsonify({"error": "Invalid locale code format. Examples: 'es', 'zh-rCN', 'fr', 'pt-rBR'."}), 400
+        
+    folder_name = f"values-{locale}"
+    folder_path = os.path.join(RES_DIR, folder_name)
+    target_xml = os.path.join(folder_path, "strings.xml")
+    
+    try:
+        os.makedirs(folder_path, exist_ok=True)
+        if not os.path.exists(target_xml):
+            with open(target_xml, 'w', encoding='utf-8') as f:
+                f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>\n')
+        return jsonify({"success": True, "folder": folder_name})
+    except Exception as e:
+        return jsonify({"error": f"Failed to create locale: {str(e)}"}), 500
+
 @app.route('/api/translate', methods=['POST'])
 def save_translation():
     """Saves a string translation and updates metadata hashes."""

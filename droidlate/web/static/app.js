@@ -39,7 +39,14 @@ const el = {
     statusBarProgressFill: document.getElementById('status-progress-fill'),
     statusBarProgressLabel: document.getElementById('status-progress-label'),
     statusBarRight: document.getElementById('status-right'),
-    filterTabs: document.querySelectorAll('.filter-tab')
+    filterTabs: document.querySelectorAll('.filter-tab'),
+    btnAddLanguage: document.getElementById('btn-add-language'),
+    addLanguageModal: document.getElementById('add-language-modal'),
+    modalClose: document.getElementById('modal-close'),
+    btnCancelModal: document.getElementById('btn-cancel-modal'),
+    btnConfirmModal: document.getElementById('btn-confirm-modal'),
+    localeInput: document.getElementById('locale-input'),
+    modalErrorMessage: document.getElementById('modal-error-message')
 };
 
 // Formatting helpers for plurals/arrays keys
@@ -154,6 +161,86 @@ function setupEventListeners() {
             }
         }
     });
+
+    // Add language modal events
+    if (el.btnAddLanguage) {
+        el.btnAddLanguage.addEventListener('click', showAddLanguageModal);
+    }
+    if (el.modalClose) {
+        el.modalClose.addEventListener('click', hideAddLanguageModal);
+    }
+    if (el.btnCancelModal) {
+        el.btnCancelModal.addEventListener('click', hideAddLanguageModal);
+    }
+    if (el.btnConfirmModal) {
+        el.btnConfirmModal.addEventListener('click', confirmAddLanguage);
+    }
+    if (el.localeInput) {
+        el.localeInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                confirmAddLanguage();
+            }
+        });
+    }
+}
+
+function showAddLanguageModal() {
+    el.localeInput.value = '';
+    el.modalErrorMessage.style.display = 'none';
+    el.modalErrorMessage.textContent = '';
+    el.addLanguageModal.style.display = 'flex';
+    el.localeInput.focus();
+}
+
+function hideAddLanguageModal() {
+    el.addLanguageModal.style.display = 'none';
+}
+
+function confirmAddLanguage() {
+    const locale = el.localeInput.value.trim();
+    if (!locale) {
+        el.modalErrorMessage.textContent = 'Please enter a locale code.';
+        el.modalErrorMessage.style.display = 'block';
+        return;
+    }
+
+    if (!/^[a-z]{2,3}(?:-r[a-zA-Z]{2,4})?$/.test(locale)) {
+        el.modalErrorMessage.textContent = 'Invalid locale code format. Examples: "es", "zh-rCN", "pt-rBR".';
+        el.modalErrorMessage.style.display = 'block';
+        return;
+    }
+
+    el.btnConfirmModal.disabled = true;
+    el.btnConfirmModal.textContent = 'Adding...';
+    el.modalErrorMessage.style.display = 'none';
+
+    fetch('/api/languages', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ locale: locale })
+    })
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(data => {
+                throw new Error(data.error || 'Failed to add language.');
+            });
+        }
+        return res.json();
+    })
+    .then(data => {
+        el.btnConfirmModal.disabled = false;
+        el.btnConfirmModal.textContent = 'Add Language';
+        hideAddLanguageModal();
+        showDashboard();
+    })
+    .catch(err => {
+        el.btnConfirmModal.disabled = false;
+        el.btnConfirmModal.textContent = 'Add Language';
+        el.modalErrorMessage.textContent = err.message;
+        el.modalErrorMessage.style.display = 'block';
+    });
 }
 
 // 1. View Routing & Dashboard loading
@@ -201,10 +288,12 @@ function showDashboard() {
                 el.projectPath.textContent = `Single File Mode: ${data.target_file}`;
                 el.statusBarLeft.textContent = "Running in single file mode";
                 el.statusBarRight.textContent = "Locales: 1";
+                if (el.btnAddLanguage) el.btnAddLanguage.style.display = 'none';
             } else {
                 el.projectPath.textContent = `Directory: ${data.res_dir}`;
                 el.statusBarLeft.textContent = `Scanned resource directory successfully`;
                 el.statusBarRight.textContent = `Locales: ${data.languages.length}`;
+                if (el.btnAddLanguage) el.btnAddLanguage.style.display = 'inline-block';
             }
 
             renderDashboardCards(data.languages);
@@ -219,7 +308,17 @@ function renderDashboardCards(languages) {
     el.languagesGrid.innerHTML = '';
     
     if (languages.length === 0) {
-        el.languagesGrid.innerHTML = `<div class="loader-container"><p>No language locales found.</p></div>`;
+        el.languagesGrid.innerHTML = `
+            <div class="loader-container">
+                <p>No language locales found.</p>
+                ${state.project && state.project.mode !== 'single' ? 
+                    `<button id="btn-empty-add-lang" class="btn-primary" style="margin-top: 10px;">+ Add New Language</button>` : ''}
+            </div>
+        `;
+        const btnEmptyAdd = document.getElementById('btn-empty-add-lang');
+        if (btnEmptyAdd) {
+            btnEmptyAdd.addEventListener('click', showAddLanguageModal);
+        }
         return;
     }
 
