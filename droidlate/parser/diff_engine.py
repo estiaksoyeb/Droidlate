@@ -235,13 +235,36 @@ def categorize_key(
 
     return 'translated'
 
+def get_global_tm_dir() -> str:
+    """Returns the platform-specific global directory for storing TM caches."""
+    import platform
+    home = os.path.expanduser("~")
+    
+    if platform.system() == "Windows":
+        local_appdata = os.environ.get("LOCALAPPDATA", os.path.join(home, "AppData", "Local"))
+        return os.path.join(local_appdata, "droidlate", "tm_cache")
+    elif platform.system() == "Darwin": # macOS
+        return os.path.join(home, "Library", "Caches", "droidlate", "tm_cache")
+    else: # Linux / Android / Termux
+        xdg_cache = os.environ.get("XDG_CACHE_HOME", os.path.join(home, ".cache"))
+        return os.path.join(xdg_cache, "droidlate", "tm_cache")
+
+def get_project_hash(project_root: str) -> str:
+    """Generates a short SHA-256 hash of the project root directory path."""
+    import hashlib
+    norm_path = os.path.normcase(os.path.abspath(project_root))
+    return hashlib.sha256(norm_path.encode('utf-8')).hexdigest()[:16]
+
 def get_tm_path(target_xml_path: str) -> str:
-    """Gets the path to the translation memory JSON file for a target XML."""
+    """Gets the path to the global translation memory JSON file for a target XML."""
     target_abs = os.path.abspath(target_xml_path)
     project_root = get_project_root(target_abs)
+    project_hash = get_project_hash(project_root)
     locale_folder = os.path.basename(os.path.dirname(target_abs))
-    metadata_dir = os.path.join(project_root, ".translation_metadata")
-    return os.path.join(metadata_dir, f"tm_{locale_folder}.json")
+    
+    global_dir = get_global_tm_dir()
+    os.makedirs(global_dir, exist_ok=True)
+    return os.path.join(global_dir, f"tm_{project_hash}_{locale_folder}.json")
 
 def load_tm(target_xml_path: str) -> dict:
     """Loads target Translation Memory JSON ledger."""
