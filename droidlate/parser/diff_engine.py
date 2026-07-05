@@ -30,11 +30,30 @@ def resolve_placeholders(placeholders: list[tuple[int | None, str]]) -> list[tup
             resolved.append((pos, ptype))
     return resolved
 
+def extract_html_tags(s: str) -> list[str]:
+    tags = []
+    # Match tags: opening, closing, or self-closing
+    for m in re.finditer(r'</?([a-zA-Z0-9:-]+)(?:\s+[^>]*)?>', s):
+        tag_text = m.group(0)
+        tag_name = m.group(1).lower()
+        is_closing = tag_text.startswith('</')
+        if ' ' in tag_text:
+            normalized = f"</{tag_name}>" if is_closing else f"<{tag_name}...>"
+        else:
+            normalized = tag_text.lower()
+        tags.append(normalized)
+    return tags
+
 def validate_placeholders(source_val: str, target_val: str) -> list[str]:
     """
-    Validates placeholder formatting between source and target values.
-    Returns a list of distinct validation warning messages (empty if valid).
+    Validates placeholder formatting, HTML tags, punctuation, and length ratio
+    between source and target values. Returns a list of distinct validation warnings.
     """
+    errors = []
+    if not target_val:
+        return errors
+
+    # 1. Placeholder check
     src_pl = extract_placeholders(source_val)
     tgt_pl = extract_placeholders(target_val)
     
@@ -44,20 +63,70 @@ def validate_placeholders(source_val: str, target_val: str) -> list[str]:
     src_map = {idx: t for idx, t in src_res}
     tgt_map = {idx: t for idx, t in tgt_res}
     
-    errors = []
-    
-    # 1. Check for missing or type mismatches
     for idx, src_type in src_map.items():
         if idx not in tgt_map:
             errors.append(f"Missing placeholder %{idx}${src_type}")
         elif tgt_map[idx] != src_type:
             errors.append(f"Type mismatch for placeholder %{idx}: expected '{src_type}', got '{tgt_map[idx]}'")
             
-    # 2. Check for unexpected/extra placeholders
     for idx, tgt_type in tgt_map.items():
         if idx not in src_map:
             errors.append(f"Extra/unexpected placeholder %{idx}${tgt_type}")
-            
+
+    # 2. HTML Tags check
+    src_tags = extract_html_tags(source_val)
+    tgt_tags = extract_html_tags(target_val)
+    
+    # Check for missing tags in target
+    for tag in set(src_tags):
+        if tag not in tgt_tags:
+            errors.append(f"Missing HTML tag '{tag}'")
+        elif tgt_tags.count(tag) < src_tags.count(tag):
+            errors.append(f"Missing HTML tag '{tag}' (count mismatch)")
+
+    # Check for extra tags in target
+    for tag in set(tgt_tags):
+        if tag not in src_tags:
+            errors.append(f"Extra/unexpected HTML tag '{tag}'")
+        elif tgt_tags.count(tag) > src_tags.count(tag):
+            errors.append(f"Extra/unexpected HTML tag '{tag}' (count mismatch)")
+
+    # 3. Trailing Punctuation check
+    s_clean = source_val.strip()
+    t_clean = target_val.strip()
+    if s_clean and t_clean:
+        punctuations = ['...', '…', '?', '!', '.', ':']
+        s_punc = None
+        for p in punctuations:
+            if s_clean.endswith(p):
+                s_punc = p
+                break
+        
+        if s_punc:
+            if s_punc in ('...', '…'):
+                if not (t_clean.endswith('...') or t_clean.endswith('…')):
+                    errors.append("Missing trailing ellipsis ('...' or '…')")
+            elif not t_clean.endswith(s_punc):
+                errors.append(f"Missing trailing punctuation '{s_punc}'")
+        else:
+            # Warn if target ends with punctuation but source doesn't
+            for p in punctuations:
+                if t_clean.endswith(p):
+                    if p in ('...', '…'):
+                        errors.append("Unexpected trailing ellipsis ('...' or '…')")
+                    else:
+                        errors.append(f"Unexpected trailing punctuation '{p}'")
+
+    # 4. Length Ratio check (only for strings with source length > 10)
+    s_len = len(source_val)
+    t_len = len(target_val)
+    if s_len > 10:
+        ratio = t_len / s_len
+        if ratio > 2.2:
+            errors.append(f"Abnormally long translation ({t_len} chars vs source {s_len} chars)")
+        elif ratio < 0.3:
+            errors.append(f"Abnormally short translation ({t_len} chars vs source {s_len} chars)")
+
     return errors
 
 def normalize_source_string(val: str) -> str:

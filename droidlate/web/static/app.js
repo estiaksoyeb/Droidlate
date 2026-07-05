@@ -483,22 +483,42 @@ function renderSuggestions(suggestions) {
     });
 }
 
-// 4. Live Placeholders Validation (Java format regex)
+// 4. Live Placeholders & QA Validation
+function extractHtmlTags(str) {
+    const TAG_REGEX = /<\/?([a-zA-Z0-9:-]+)(?:\s+[^>]*)?>/g;
+    let tags = [];
+    let m;
+    TAG_REGEX.lastIndex = 0;
+    while ((m = TAG_REGEX.exec(str)) !== null) {
+        const tagText = m[0];
+        const tagName = m[1].toLowerCase();
+        const isClosing = tagText.startsWith('</');
+        let normalized;
+        if (tagText.includes(' ')) {
+            normalized = isClosing ? `</${tagName}>` : `<${tagName}...>`;
+        } else {
+            normalized = tagText.toLowerCase();
+        }
+        tags.push(normalized);
+    }
+    return tags;
+}
+
 function runValidation(source, translation) {
     if (!translation) return [];
     
+    let warnings = [];
+
+    // 1. Live Placeholders Validation
     const PLACEHOLDER_REGEX = /%([0-9]+\$)?[-#+ 0,\(<]*[0-9]*(\.[0-9]+)?([a-zA-Z%])/g;
-    
     const extract = (str) => {
         let matches = [];
         let m;
-        // Reset match index
         PLACEHOLDER_REGEX.lastIndex = 0;
         while ((m = PLACEHOLDER_REGEX.exec(str)) !== null) {
             const idxStr = m[1];
             const ptype = m[3];
             if (ptype === '%') continue; // Skip literal %%
-            
             const idx = idxStr ? parseInt(idxStr.slice(0, -1)) : null;
             matches.push({ index: idx, type: ptype });
         }
@@ -526,9 +546,6 @@ function runValidation(source, translation) {
     const tgtMap = {};
     tgtList.forEach(item => tgtMap[item.index] = item.type);
 
-    const warnings = [];
-
-    // Check for missing or type mismatch
     Object.keys(srcMap).forEach(idx => {
         const srcType = srcMap[idx];
         if (!(idx in tgtMap)) {
@@ -538,12 +555,78 @@ function runValidation(source, translation) {
         }
     });
 
-    // Check for unexpected extra placeholders
     Object.keys(tgtMap).forEach(idx => {
         if (!(idx in srcMap)) {
             warnings.push(`Extra/unexpected placeholder %${idx}$${tgtMap[idx]}`);
         }
     });
+
+    // 2. HTML Tags check
+    const srcTags = extractHtmlTags(source);
+    const tgtTags = extractHtmlTags(translation);
+    const countOccurrences = (arr, val) => arr.filter(item => item === val).length;
+
+    new Set(srcTags).forEach(tag => {
+        if (!tgtTags.includes(tag)) {
+            warnings.push(`Missing HTML tag '${tag}'`);
+        } else if (countOccurrences(tgtTags, tag) < countOccurrences(srcTags, tag)) {
+            warnings.push(`Missing HTML tag '${tag}' (count mismatch)`);
+        }
+    });
+
+    new Set(tgtTags).forEach(tag => {
+        if (!srcTags.includes(tag)) {
+            warnings.push(`Extra/unexpected HTML tag '${tag}'`);
+        } else if (countOccurrences(tgtTags, tag) > countOccurrences(srcTags, tag)) {
+            warnings.push(`Extra/unexpected HTML tag '${tag}' (count mismatch)`);
+        }
+    });
+
+    // 3. Trailing Punctuation check
+    const sClean = source.strip ? source.strip() : source.trim();
+    const tClean = translation.strip ? translation.strip() : translation.trim();
+    if (sClean && tClean) {
+        const punctuations = ['...', '…', '?', '!', '.', ':'];
+        let sPunc = null;
+        for (let p of punctuations) {
+            if (sClean.endsWith(p)) {
+                sPunc = p;
+                break;
+            }
+        }
+        
+        if (sPunc) {
+            if (sPunc === '...' || sPunc === '…') {
+                if (!(tClean.endsWith('...') || tClean.endsWith('…'))) {
+                    warnings.push("Missing trailing ellipsis ('...' or '…')");
+                }
+            } else if (!tClean.endsWith(sPunc)) {
+                warnings.push(`Missing trailing punctuation '${sPunc}'`);
+            }
+        } else {
+            for (let p of punctuations) {
+                if (tClean.endsWith(p)) {
+                    if (p === '...' || p === '…') {
+                        warnings.push("Unexpected trailing ellipsis ('...' or '…')");
+                    } else {
+                        warnings.push(`Unexpected trailing punctuation '${p}'`);
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Length Ratio check
+    const sLen = source.length;
+    const tLen = translation.length;
+    if (sLen > 10) {
+        const ratio = tLen / sLen;
+        if (ratio > 2.2) {
+            warnings.push(`Abnormally long translation (${tLen} chars vs source ${sLen} chars)`);
+        } else if (ratio < 0.3) {
+            warnings.push(`Abnormally short translation (${tLen} chars vs source ${sLen} chars)`);
+        }
+    }
 
     return warnings;
 }
@@ -554,11 +637,11 @@ function updateValidationUI(warnings) {
     if (warnings.length === 0) {
         el.validationPanel.classList.remove('invalid');
         el.validationIcon.textContent = '✓';
-        el.validationSummary.textContent = 'Placeholders match source';
+        el.validationSummary.textContent = 'Validation checks passed';
     } else {
         el.validationPanel.classList.add('invalid');
         el.validationIcon.textContent = '✗';
-        el.validationSummary.textContent = `${warnings.length} Placeholder warning${warnings.length > 1 ? 's' : ''} found:`;
+        el.validationSummary.textContent = `${warnings.length} QA warning${warnings.length > 1 ? 's' : ''} found:`;
         
         warnings.forEach(warn => {
             const li = document.createElement('li');
