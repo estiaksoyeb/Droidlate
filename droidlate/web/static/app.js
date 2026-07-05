@@ -606,53 +606,6 @@ function runValidation(source, translation) {
             warnings.push(`Extra/unexpected HTML tag '${tag}' (count mismatch)`);
         }
     });
-
-    // 3. Trailing Punctuation check
-    const sClean = source.strip ? source.strip() : source.trim();
-    const tClean = translation.strip ? translation.strip() : translation.trim();
-    if (sClean && tClean) {
-        const punctuations = ['...', '…', '?', '!', '.', ':'];
-        let sPunc = null;
-        for (let p of punctuations) {
-            if (sClean.endsWith(p)) {
-                sPunc = p;
-                break;
-            }
-        }
-        
-        if (sPunc) {
-            if (sPunc === '...' || sPunc === '…') {
-                if (!(tClean.endsWith('...') || tClean.endsWith('…'))) {
-                    warnings.push("Missing trailing ellipsis ('...' or '…')");
-                }
-            } else if (!tClean.endsWith(sPunc)) {
-                warnings.push(`Missing trailing punctuation '${sPunc}'`);
-            }
-        } else {
-            for (let p of punctuations) {
-                if (tClean.endsWith(p)) {
-                    if (p === '...' || p === '…') {
-                        warnings.push("Unexpected trailing ellipsis ('...' or '…')");
-                    } else {
-                        warnings.push(`Unexpected trailing punctuation '${p}'`);
-                    }
-                }
-            }
-        }
-    }
-
-    // 4. Length Ratio check
-    const sLen = source.length;
-    const tLen = translation.length;
-    if (sLen > 10) {
-        const ratio = tLen / sLen;
-        if (ratio > 2.2) {
-            warnings.push(`Abnormally long translation (${tLen} chars vs source ${sLen} chars)`);
-        } else if (ratio < 0.3) {
-            warnings.push(`Abnormally short translation (${tLen} chars vs source ${sLen} chars)`);
-        }
-    }
-
     return warnings;
 }
 

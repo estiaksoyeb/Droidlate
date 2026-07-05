@@ -90,43 +90,6 @@ def validate_placeholders(source_val: str, target_val: str) -> list[str]:
             errors.append(f"Extra/unexpected HTML tag '{tag}'")
         elif tgt_tags.count(tag) > src_tags.count(tag):
             errors.append(f"Extra/unexpected HTML tag '{tag}' (count mismatch)")
-
-    # 3. Trailing Punctuation check
-    s_clean = source_val.strip()
-    t_clean = target_val.strip()
-    if s_clean and t_clean:
-        punctuations = ['...', '…', '?', '!', '.', ':']
-        s_punc = None
-        for p in punctuations:
-            if s_clean.endswith(p):
-                s_punc = p
-                break
-        
-        if s_punc:
-            if s_punc in ('...', '…'):
-                if not (t_clean.endswith('...') or t_clean.endswith('…')):
-                    errors.append("Missing trailing ellipsis ('...' or '…')")
-            elif not t_clean.endswith(s_punc):
-                errors.append(f"Missing trailing punctuation '{s_punc}'")
-        else:
-            # Warn if target ends with punctuation but source doesn't
-            for p in punctuations:
-                if t_clean.endswith(p):
-                    if p in ('...', '…'):
-                        errors.append("Unexpected trailing ellipsis ('...' or '…')")
-                    else:
-                        errors.append(f"Unexpected trailing punctuation '{p}'")
-
-    # 4. Length Ratio check (only for strings with source length > 10)
-    s_len = len(source_val)
-    t_len = len(target_val)
-    if s_len > 10:
-        ratio = t_len / s_len
-        if ratio > 2.2:
-            errors.append(f"Abnormally long translation ({t_len} chars vs source {s_len} chars)")
-        elif ratio < 0.3:
-            errors.append(f"Abnormally short translation ({t_len} chars vs source {s_len} chars)")
-
     return errors
 
 def normalize_source_string(val: str) -> str:
