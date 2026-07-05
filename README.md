@@ -8,6 +8,7 @@
 
 * **Local Offline Workspace:** Translate and edit local localization files on your machine. Avoid uploading sensitive resource files to third-party servers or setting up heavy server-side infrastructure.
 * **Preserving XML Formatting & Comments:** Standard XML parsers rewrite files, wiping out comments, custom spacing, ordering, and attributes. Droidlate's custom parsing engine performs in-place character index replacements to maintain exact XML styling, comments, structure, and formatting.
+* **Plurals & String-Arrays Support:** Seamlessly edit standard `<string>` elements, `<plurals>` (supporting quantity qualifiers like `one`, `other`, etc.), and ordered `<string-array>` lists within the same unified workspace.
 * **Tracking Outdated Translations:** When developers update a base string in `values/strings.xml`, translations can become outdated. Droidlate normalizes and hashes base strings into a lightweight local sidecar metadata file, highlighting which target translations need updates.
 * **Placeholder Verification & QA:** Mismatched Java-style placeholders (e.g., `%s`, `%1$d` in the source but `% d` or missing in the target) cause runtime crashes on Android. Droidlate validates alignment on every keystroke and flags warnings.
 * **Orphaned String Pruning:** Over time, strings are deleted from the main codebase but linger in translation files. Droidlate lists these "orphaned" strings and lets you prune them with a single click.
@@ -16,6 +17,10 @@
 
 ## Key Features
 
+* **Interactive Language Creation:** Add and initialize new target locales (e.g., `es`, `fr`, `zh-rCN`) directly from the dashboard UI without manual directory setup.
+* **Local Translation Memory (TM):** Indexes your existing translations locally to suggest exact and partial completions offline, facilitating consistent phrasing across your codebase.
+* **Translatable Flags & Read-Only View:** Respects `translatable="false"` base flags. Non-translatable strings are isolated under a read-only filter tab and auto-pruned from target XML files.
+* **Automatic Update Checker:** Periodically checks PyPI in the background (cached for 24 hours) and alerts you in the web UI and CLI if a new release is available.
 * **Sleek UI with Dark Mode:** A modern HSL-tailored interface featuring layout toggles (especially optimized for mobile web layouts), status indicators, and translation statistics.
 * **Keyboard Shortcuts:** Built for productivity. Use `Ctrl+S` to instantly Save & Next, and `Alt+1`/`Alt+2` to paste dynamic suggestions.
 * **Auto-Translation Suggestions:** Integrates with translation suggestion services (like Google Translate and MyMemory) to suggest translations on the fly.
