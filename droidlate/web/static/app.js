@@ -268,7 +268,7 @@ function showDashboard() {
             const banner = document.getElementById('update-banner');
             if (data && data.update_available) {
                 const text = document.getElementById('update-banner-text');
-                text.innerHTML = `🚀 A new version of Droidlate is available: <strong>${data.current_version}</strong> → <strong>${data.latest_version}</strong>. Run <code>pipx upgrade droidlate</code> or <code>pip install --upgrade droidlate</code> to update.`;
+                text.innerHTML = `A new version of Droidlate is available: <strong>${data.current_version}</strong> → <strong>${data.latest_version}</strong>. Run <code>pipx upgrade droidlate</code> or <code>pip install --upgrade droidlate</code> to update.`;
                 banner.style.display = 'flex';
             } else {
                 banner.style.display = 'none';
