@@ -5,6 +5,17 @@ import requests
 from typing import Optional
 from . import __version__
 
+def get_installed_version() -> str:
+    """Returns the installed package version from metadata, falling back to hardcoded __version__."""
+    try:
+        from importlib.metadata import version
+        return version("droidlate")
+    except Exception:
+        return __version__
+
+def parse_ver(v: str) -> tuple:
+    return tuple(int(x) for x in v.split(".") if x.isdigit())
+
 def get_update_cache_path() -> str:
     """Returns the path to the global update check cache JSON file."""
     import platform
@@ -37,11 +48,20 @@ def check_for_updates() -> Optional[dict]:
         except Exception:
             pass
             
+    current_version = get_installed_version()
     last_check = cached_data.get("last_check", 0)
+    latest_version = cached_data.get("latest_version")
+    
     # Check if 24 hours (86400 seconds) have passed
-    if current_time - last_check < 86400:
-        if cached_data.get("update_available"):
-            return cached_data
+    if current_time - last_check < 86400 and latest_version:
+        curr_parsed = parse_ver(current_version)
+        late_parsed = parse_ver(latest_version)
+        if late_parsed > curr_parsed:
+            return {
+                "current_version": current_version,
+                "latest_version": latest_version,
+                "update_available": True
+            }
         return None
         
     # 2. Query PyPI JSON API
@@ -52,40 +72,42 @@ def check_for_updates() -> Optional[dict]:
             data = response.json()
             latest_version = data.get("info", {}).get("version")
             if latest_version:
-                def parse_ver(v):
-                    return tuple(int(x) for x in v.split(".") if x.isdigit())
-                
-                curr_parsed = parse_ver(__version__)
-                late_parsed = parse_ver(latest_version)
-                
-                update_available = late_parsed > curr_parsed
-                
                 result = {
                     "last_check": current_time,
-                    "current_version": __version__,
-                    "latest_version": latest_version,
-                    "update_available": update_available
+                    "latest_version": latest_version
                 }
                 
-                with open(cache_path, 'w', encoding='utf-8') as f:
-                    json.dump(result, f, ensure_ascii=False, indent=2)
+                try:
+                    with open(cache_path, 'w', encoding='utf-8') as f:
+                        json.dump(result, f, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
                     
-                if update_available:
-                    return result
-            else:
-                cached_data["last_check"] = current_time
-                with open(cache_path, 'w', encoding='utf-8') as f:
-                    json.dump(cached_data, f, ensure_ascii=False, indent=2)
-        else:
-            cached_data["last_check"] = current_time
-            with open(cache_path, 'w', encoding='utf-8') as f:
-                json.dump(cached_data, f, ensure_ascii=False, indent=2)
+                curr_parsed = parse_ver(current_version)
+                late_parsed = parse_ver(latest_version)
+                
+                if late_parsed > curr_parsed:
+                    return {
+                        "current_version": current_version,
+                        "latest_version": latest_version,
+                        "update_available": True
+                    }
+                return None
+                
+        # If status code is not 200 or version not found in info
+        # Update last_check to avoid spamming the API on every run
+        save_fallback_cache(cache_path, current_time, latest_version)
     except Exception:
-        try:
-            cached_data["last_check"] = current_time
-            with open(cache_path, 'w', encoding='utf-8') as f:
-                json.dump(cached_data, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        save_fallback_cache(cache_path, current_time, latest_version)
             
     return None
+
+def save_fallback_cache(cache_path: str, current_time: float, latest_version: Optional[str]):
+    try:
+        cache_data = {"last_check": current_time}
+        if latest_version:
+            cache_data["latest_version"] = latest_version
+        with open(cache_path, 'w', encoding='utf-8') as f:
+            json.dump(cache_data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
