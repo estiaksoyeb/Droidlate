@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from typing import Optional
 
 from ..parser.xml_parser import parse_strings_xml, write_string_translation, remove_string_translation
-from ..parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, rebuild_tm_cache, get_tm_suggestion, prune_nontranslatable_strings
+from ..parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, rebuild_tm_cache, get_tm_suggestion, prune_nontranslatable_strings, is_key_orphaned
 from ..translator.engine import TranslationOrchestrator
 
 # Initialize Flask app
@@ -57,7 +57,7 @@ def get_project():
         untranslated = 0
         outdated = 0
         translated = 0
-        orphaned = len([k for k in target_entries.keys() if k not in source_entries])
+        orphaned = len([k for k in target_entries.keys() if is_key_orphaned(k, source_entries)])
         
         for key, entry in source_entries.items():
             tgt_val = target_entries.get(key).value if key in target_entries else None
@@ -136,7 +136,7 @@ def get_project():
                 untranslated = 0
                 outdated = 0
                 translated = 0
-                orphaned = len([k for k in target_entries.keys() if k not in source_entries])
+                orphaned = len([k for k in target_entries.keys() if is_key_orphaned(k, source_entries)])
                 
                 for key, entry in source_entries.items():
                     tgt_val = target_entries.get(key).value if key in target_entries else None
@@ -241,7 +241,7 @@ def get_strings():
         
     # 2. Add orphaned entries (exists in target but no longer in source)
     for key in target_entries.keys():
-        if key not in source_entries:
+        if is_key_orphaned(key, source_entries):
             strings_list.append({
                 "key": key,
                 "source": "(Removed from English source XML file)",

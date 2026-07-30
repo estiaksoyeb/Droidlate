@@ -44,7 +44,11 @@ def extract_html_tags(s: str) -> list[str]:
         tags.append(normalized)
     return tags
 
-def validate_placeholders(source_val: str, target_val: str) -> list[str]:
+# Set of quantity categories where numerical placeholders can be legitimately omitted by target grammar (e.g., Arabic dual forms or fixed single count words)
+OPTIONAL_NUMERIC_PLURAL_QUANTITIES = {'one', 'two'}
+NUMERIC_PLACEHOLDER_TYPES = {'d', 'i', 'u', 'o', 'x', 'X'}
+
+def validate_placeholders(source_val: str, target_val: str, key: str | None = None) -> list[str]:
     """
     Validates placeholder formatting, HTML tags, punctuation, and length ratio
     between source and target values. Returns a list of distinct validation warnings.
@@ -52,6 +56,13 @@ def validate_placeholders(source_val: str, target_val: str) -> list[str]:
     errors = []
     if not target_val:
         return errors
+
+    # Check if this is a plural item for 'one' or 'two' quantity
+    is_optional_numeric_plural = False
+    if key and '#plural#' in key:
+        quantity = key.split('#plural#')[-1]
+        if quantity in OPTIONAL_NUMERIC_PLURAL_QUANTITIES:
+            is_optional_numeric_plural = True
 
     # 1. Placeholder check
     src_pl = extract_placeholders(source_val)
@@ -65,6 +76,9 @@ def validate_placeholders(source_val: str, target_val: str) -> list[str]:
     
     for idx, src_type in src_map.items():
         if idx not in tgt_map:
+            # Omit missing placeholder warning if numeric placeholder in optional plural category (e.g. Arabic one/two)
+            if is_optional_numeric_plural and src_type.lower() in NUMERIC_PLACEHOLDER_TYPES:
+                continue
             errors.append(f"Missing placeholder %{idx}${src_type}")
         elif tgt_map[idx] != src_type:
             errors.append(f"Type mismatch for placeholder %{idx}: expected '{src_type}', got '{tgt_map[idx]}'")
@@ -181,7 +195,7 @@ def categorize_key(
         return 'untranslated'
 
     # 2. Warnings/Errors check
-    warnings = validate_placeholders(source_val, target_val)
+    warnings = validate_placeholders(source_val, target_val, key=key)
     if warnings:
         return 'warnings'
 
@@ -278,6 +292,21 @@ def rebuild_tm_cache(target_xml_path: str, source_entries: dict, target_entries:
                 changed = True
     if changed:
         save_tm(target_xml_path, tm)
+
+def is_key_orphaned(key: str, source_entries: dict) -> bool:
+    """
+    Checks if a target key is orphaned relative to source_entries.
+    Handles standard keys, plural items (key#plural#quantity), and string-array items (key#array#index).
+    """
+    if key in source_entries:
+        return False
+    if '#plural#' in key:
+        base_key = key.split('#plural#')[0]
+        return not any(k == base_key or k.startswith(f"{base_key}#plural#") for k in source_entries)
+    if '#array#' in key:
+        base_key = key.split('#array#')[0]
+        return not any(k == base_key or k.startswith(f"{base_key}#array#") for k in source_entries)
+    return True
 
 def prune_nontranslatable_strings(target_path: str, source_entries: dict, target_entries: dict) -> bool:
     """

@@ -348,7 +348,7 @@ function renderDashboardCards(languages) {
                 </div>
                 <div class="lang-stats">
                     <div class="stat-item">Translated: <span class="stat-val">${lang.translated}</span></div>
-                    <div class="stat-item">Outdated: <span class="stat-val stat-outdated">${lang.outdated}</span></div>
+                    <div class="stat-item stat-item-ellipsis" title="Outdated / Warnings">Outdated / Warnings: <span class="stat-val stat-outdated">${lang.outdated}</span></div>
                     <div class="stat-item">Untranslated: <span class="stat-val stat-untranslated">${lang.untranslated}</span></div>
                     <div class="stat-item">Orphaned: <span class="stat-val stat-untranslated" style="color:var(--danger);">${lang.orphaned || 0}</span></div>
                     <div class="stat-item">Total: <span class="stat-val">${lang.total}</span></div>
@@ -395,9 +395,23 @@ function showEditor(langFolder) {
                 state.activeFilter = 'all';
             }
             
-            // Sync filter tabs classes in UI
+            // Update count badges on sidebar filter tabs
+            const counts = {
+                'all': state.strings.length,
+                'untranslated': state.strings.filter(s => s.status === 'untranslated').length,
+                'outdated': state.strings.filter(s => s.status === 'outdated' || s.status === 'warnings').length,
+                'warnings': state.strings.filter(s => s.status === 'warnings').length,
+                'readonly': state.strings.filter(s => s.status === 'readonly').length,
+                'orphaned': state.strings.filter(s => s.status === 'orphaned').length
+            };
+
             el.filterTabs.forEach(tab => {
-                if (tab.dataset.filter === state.activeFilter) {
+                const filter = tab.dataset.filter;
+                const countSpan = tab.querySelector('.tab-count');
+                if (countSpan && counts[filter] !== undefined) {
+                    countSpan.textContent = `(${counts[filter]})`;
+                }
+                if (filter === state.activeFilter) {
                     tab.classList.add('active');
                 } else {
                     tab.classList.remove('active');
@@ -427,6 +441,7 @@ function applySidebarFilters() {
         if (!keyMatch) return false;
         
         if (state.activeFilter === 'all') return true;
+        if (state.activeFilter === 'outdated') return item.status === 'outdated' || item.status === 'warnings';
         return item.status === state.activeFilter;
     });
 

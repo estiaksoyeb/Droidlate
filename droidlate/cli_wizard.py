@@ -3,7 +3,7 @@ import sys
 import re
 
 from .parser.xml_parser import parse_strings_xml, write_string_translation
-from .parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, validate_placeholders
+from .parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, validate_placeholders, is_key_orphaned
 from .main import auto_detect_res_dir
 
 def run_wizard():
@@ -59,7 +59,7 @@ def run_wizard():
     metadata_changed = False
     
     # Warn about orphaned translation keys
-    orphaned_keys = [k for k in target_entries.keys() if k not in source_entries]
+    orphaned_keys = [k for k in target_entries.keys() if is_key_orphaned(k, source_entries)]
     if orphaned_keys:
         print(f"\n[!] Warning: Found {len(orphaned_keys)} orphaned key(s) in translation that no longer exist in English source XML.")
         print("    Use the Web interface to safely prune them or edit the XML file manually.")
@@ -118,7 +118,7 @@ def run_wizard():
             continue
             
         # Check formatting warnings before saving
-        warnings = validate_placeholders(src_entry.value, translation)
+        warnings = validate_placeholders(src_entry.value, translation, key=key)
         if warnings:
             print("\nWARNING: Placeholder mismatches detected:")
             for warn in warnings:

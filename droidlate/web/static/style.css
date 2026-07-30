@@ -350,6 +350,12 @@ body {
     transition: border-color 0.2s, background-color 0.2s, color 0.2s;
 }
 
+.filter-tab .tab-count {
+    opacity: 0.75;
+    font-size: 11px;
+    margin-left: 2px;
+}
+
 .filter-tab:hover {
     border-color: var(--text-sub);
     color: var(--text-main);
