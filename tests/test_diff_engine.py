@@ -45,6 +45,10 @@ class TestDiffEngine(unittest.TestCase):
         # Outdated
         meta_old = {"source_hash": "old_hash_123"}
         self.assertEqual(categorize_key("key", "val", "trad", meta_old, {}), "outdated")
+        # Warnings vs Suppressed Warning
+        self.assertEqual(categorize_key("key", "val %s", "trad without ph", meta, {}), "warnings")
+        meta_suppressed = {"source_hash": src_hash, "ignore_warnings": True}
+        self.assertEqual(categorize_key("key", "val", "trad", meta_suppressed, {}), "translated")
 
     def test_is_key_orphaned(self):
         sources = {"app_name": None, "song_count#plural#one": None}

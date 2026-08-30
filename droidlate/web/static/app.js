@@ -52,6 +52,7 @@ const el = {
     btnConfirmModal: document.getElementById('btn-confirm-modal'),
     localeInput: document.getElementById('locale-input'),
     modalErrorMessage: document.getElementById('modal-error-message'),
+    btnToggleIgnoreWarning: document.getElementById('btn-toggle-ignore-warning'),
     pluralModal: document.getElementById('plural-modal'),
     pluralModalTitle: document.getElementById('plural-modal-title'),
     pluralModalSubtitle: document.getElementById('plural-modal-subtitle'),
@@ -787,24 +788,45 @@ function runValidation(source, translation) {
 
 function updateValidationUI(warnings) {
     el.validationErrorsList.innerHTML = '';
+    const activeStr = state.strings.find(s => s.key === state.currentKey);
+    const isIgnored = activeStr ? !!activeStr.ignore_warnings : false;
+    
+    if (el.btnToggleIgnoreWarning) {
+        el.btnToggleIgnoreWarning.style.display = 'none';
+        el.btnToggleIgnoreWarning.onclick = null;
+    }
     
     if (warnings.length === 0) {
-        el.validationPanel.classList.remove('invalid');
-        el.validationPanel.classList.remove('info');
+        el.validationPanel.classList.remove('invalid', 'info', 'ignored');
         el.validationIcon.textContent = '✓';
         el.validationSummary.textContent = 'Validation checks passed';
     } else {
-        const isReadOnly = state.strings.find(s => s.key === state.currentKey)?.status === 'readonly';
+        const isReadOnly = activeStr?.status === 'readonly';
         if (isReadOnly) {
-            el.validationPanel.classList.remove('invalid');
+            el.validationPanel.classList.remove('invalid', 'ignored');
             el.validationPanel.classList.add('info');
             el.validationIcon.textContent = 'ℹ';
             el.validationSummary.textContent = 'Non-translatable resource:';
+        } else if (isIgnored) {
+            el.validationPanel.classList.remove('invalid', 'info');
+            el.validationPanel.classList.add('ignored');
+            el.validationIcon.textContent = '⚠';
+            el.validationSummary.textContent = `${warnings.length} QA warning${warnings.length > 1 ? 's' : ''} (Ignored by translator)`;
+            if (el.btnToggleIgnoreWarning) {
+                el.btnToggleIgnoreWarning.style.display = 'inline-block';
+                el.btnToggleIgnoreWarning.textContent = 'Re-enable Warning';
+                el.btnToggleIgnoreWarning.onclick = () => toggleWarningSuppression(activeStr.key, false);
+            }
         } else {
-            el.validationPanel.classList.remove('info');
+            el.validationPanel.classList.remove('info', 'ignored');
             el.validationPanel.classList.add('invalid');
             el.validationIcon.textContent = '✗';
             el.validationSummary.textContent = `${warnings.length} QA warning${warnings.length > 1 ? 's' : ''} found:`;
+            if (el.btnToggleIgnoreWarning) {
+                el.btnToggleIgnoreWarning.style.display = 'inline-block';
+                el.btnToggleIgnoreWarning.textContent = 'Ignore Warning';
+                el.btnToggleIgnoreWarning.onclick = () => toggleWarningSuppression(activeStr.key, true);
+            }
         }
         
         warnings.forEach(warn => {
@@ -812,6 +834,87 @@ function updateValidationUI(warnings) {
             li.textContent = warn;
             el.validationErrorsList.appendChild(li);
         });
+    }
+}
+
+function updatePluralValidationUI(key, currentVal) {
+    const entry = state.strings.find(s => s.key === key);
+    if (!entry) return;
+    const card = document.getElementById(`plural-card-${key}`);
+    const valContainer = document.getElementById(`plural-val-${key}`);
+    const warns = runValidation(entry.source, currentVal);
+    const isIgnored = !!entry.ignore_warnings;
+
+    if (card) {
+        if (warns.length > 0 && !isIgnored) card.classList.add('has-warnings');
+        else card.classList.remove('has-warnings');
+    }
+
+    if (valContainer) {
+        if (warns.length === 0) {
+            valContainer.innerHTML = '';
+        } else if (isIgnored) {
+            valContainer.innerHTML = `
+                <span class="warning-ignored-tag">⚠ Warning Ignored</span>
+                <button type="button" class="btn-ignore-warning" onclick="toggleWarningSuppression('${escapeHtml(key)}', false)">Re-enable</button>
+            `;
+        } else {
+            valContainer.innerHTML = `
+                ${warns.map(w => `<span>⚠ ${escapeHtml(w)}</span>`).join('')}
+                <button type="button" class="btn-ignore-warning" onclick="toggleWarningSuppression('${escapeHtml(key)}', true)">Ignore Warning</button>
+            `;
+        }
+    }
+}
+
+async function toggleWarningSuppression(key, ignore) {
+    const entry = state.strings.find(s => s.key === key);
+    if (!entry) return;
+
+    try {
+        const res = await fetch('/api/warnings/ignore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                lang: state.activeLang || '',
+                key: key,
+                ignore: ignore
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            entry.ignore_warnings = ignore;
+            const currentVal = (state.currentKey === key && el.translationInput) ? el.translationInput.value.trim() : (entry.translation || '');
+            const warnings = runValidation(entry.source, currentVal);
+            if (currentVal) {
+                entry.status = (warnings.length > 0 && !ignore) ? 'warnings' : 'translated';
+            }
+            if (state.currentKey === key) {
+                el.currentKeyStatus.textContent = entry.status.toUpperCase();
+                el.currentKeyStatus.className = `status-badge ${entry.status.toUpperCase()}`;
+                updateValidationUI(warnings);
+            }
+            applySidebarFilters();
+
+            // Update plural card validation UI if modal is open
+            const pluralCard = document.getElementById(`plural-card-${key}`);
+            if (pluralCard) {
+                const pluralInput = document.getElementById(`plural-input-${key}`);
+                const pluralVal = pluralInput ? pluralInput.value : entry.translation;
+                updatePluralValidationUI(key, pluralVal);
+
+                if (key.includes('#plural#')) {
+                    const baseKey = key.split('#plural#')[0];
+                    const groupEntries = state.strings.filter(s => s.key.startsWith(`${baseKey}#plural#`));
+                    const translatedCount = groupEntries.filter(e => e.status === 'translated' || (e.translation && e.translation.trim().length > 0)).length;
+                    el.pluralModalSubtitle.textContent = `${translatedCount}/${groupEntries.length} forms translated (${state.activeLang || 'target'})`;
+                }
+            }
+        } else {
+            console.error('Warning suppression API returned error:', data.error);
+        }
+    } catch (err) {
+        console.error('Failed to toggle warning suppression:', err);
     }
 }
 
@@ -865,7 +968,7 @@ function saveCurrentTranslation() {
             if (!value.trim()) {
                 activeStr.status = 'untranslated';
             } else {
-                activeStr.status = warnings.length > 0 ? 'warnings' : 'translated';
+                activeStr.status = (warnings.length > 0 && !activeStr.ignore_warnings) ? 'warnings' : 'translated';
             }
             
             // Reapply filters to update sidebar list elements
@@ -1075,7 +1178,11 @@ function openPluralEditor(baseKey) {
 
                 <div class="plural-form-footer">
                     <div class="plural-form-validation" id="plural-val-${escapeHtml(entry.key)}">
-                        ${warnings.map(w => `<span>⚠ ${escapeHtml(w)}</span>`).join('')}
+                        ${warnings.length > 0 ? (
+                            entry.ignore_warnings
+                                ? `<span>⚠ Warning Ignored</span> <button type="button" class="btn-ignore-warning" onclick="toggleWarningSuppression('${escapeHtml(entry.key)}', false)">Re-enable</button>`
+                                : `${warnings.map(w => `<span>⚠ ${escapeHtml(w)}</span>`).join('')} <button type="button" class="btn-ignore-warning" onclick="toggleWarningSuppression('${escapeHtml(entry.key)}', true)">Ignore Warning</button>`
+                        ) : ''}
                     </div>
                     <button type="button" class="btn-save-plural" id="btn-save-plural-${escapeHtml(entry.key)}" onclick="savePluralForm('${escapeHtml(entry.key)}')">
                         Save
@@ -1092,18 +1199,7 @@ function openPluralEditor(baseKey) {
         const input = document.getElementById(`plural-input-${entry.key}`);
         if (input) {
             input.addEventListener('input', (e) => {
-                const card = document.getElementById(`plural-card-${entry.key}`);
-                const valContainer = document.getElementById(`plural-val-${entry.key}`);
-                const currentVal = e.target.value;
-                const warns = runValidation(entry.source, currentVal);
-                
-                if (card) {
-                    if (warns.length > 0) card.classList.add('has-warnings');
-                    else card.classList.remove('has-warnings');
-                }
-                if (valContainer) {
-                    valContainer.innerHTML = warns.map(w => `<span>⚠ ${escapeHtml(w)}</span>`).join('');
-                }
+                updatePluralValidationUI(entry.key, e.target.value);
             });
         }
     });
@@ -1171,7 +1267,7 @@ function savePluralForm(key) {
             if (!value) {
                 entry.status = 'untranslated';
             } else {
-                entry.status = warnings.length > 0 ? 'warnings' : 'translated';
+                entry.status = (warnings.length > 0 && !entry.ignore_warnings) ? 'warnings' : 'translated';
             }
 
             // Sync with main editor workspace if this key is currently selected
@@ -1280,6 +1376,7 @@ window.hidePluralEditor = hidePluralEditor;
 window.savePluralForm = savePluralForm;
 window.deletePluralForm = deletePluralForm;
 window.addPluralQuantity = addPluralQuantity;
+window.toggleWarningSuppression = toggleWarningSuppression;
 
 // App Initialization Entry
 document.addEventListener('DOMContentLoaded', () => {

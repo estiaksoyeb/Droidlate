@@ -229,6 +229,7 @@ def get_strings():
         current_norm = normalize_source_string(entry.value)
         src_hash = compute_source_hash(current_norm)
         
+        is_ignored = bool(meta_val.get("ignore_warnings", False)) if meta_val else False
         strings_list.append({
             "key": key,
             "source": entry.value,
@@ -236,7 +237,8 @@ def get_strings():
             "translation": tgt_val or "",
             "comment": entry.comment,
             "status": status,
-            "attrib": entry.attrib
+            "attrib": entry.attrib,
+            "ignore_warnings": is_ignored
         })
         
     # 2. Add target entries not in source entries (orphans or target-specific plural/array forms)
@@ -250,7 +252,8 @@ def get_strings():
                     "translation": target_entries[key].value,
                     "comment": "Orphaned key (no longer exists in source strings.xml)",
                     "status": "orphaned",
-                    "attrib": target_entries[key].attrib
+                    "attrib": target_entries[key].attrib,
+                    "ignore_warnings": False
                 })
             else:
                 # Valid target plural or array form (e.g. Russian few/many, Arabic dual)
@@ -273,6 +276,7 @@ def get_strings():
                 tgt_val = target_entries[key].value
                 meta_val = metadata.get(key)
                 status = categorize_key(key, ref_val, tgt_val, meta_val, target_entries[key].attrib)
+                is_ignored = bool(meta_val.get("ignore_warnings", False)) if meta_val else False
                 
                 strings_list.append({
                     "key": key,
@@ -281,7 +285,8 @@ def get_strings():
                     "translation": tgt_val,
                     "comment": ref_entry.comment if ref_entry else None,
                     "status": status,
-                    "attrib": target_entries[key].attrib
+                    "attrib": target_entries[key].attrib,
+                    "ignore_warnings": is_ignored
                 })
         
     return jsonify({
@@ -334,6 +339,7 @@ def save_translation():
     key = data.get('key')
     value = data.get('value')
     client_source_hash = data.get('source_hash')
+    ignore_warnings = data.get('ignore_warnings')
     
     if not key:
         return jsonify({"error": "Missing key."}), 400
@@ -395,10 +401,33 @@ def save_translation():
     else:
         success = write_string_translation(tgt_path, key, value, src_entry.attrib)
         
-        # Update sidecar metadata hash
-        update_metadata_entry(tgt_path, key, src_entry.value, value)
+        # Update sidecar metadata hash and ignore_warnings state
+        update_metadata_entry(tgt_path, key, src_entry.value, value, ignore_warnings=ignore_warnings)
         
     return jsonify({"success": success})
+
+@app.route('/api/warnings/ignore', methods=['POST'])
+def suppress_warning():
+    """Sets or clears the ignore_warnings flag for a specific key in the metadata ledger."""
+    global RES_DIR, SOURCE_XML, TARGET_XML, IS_SINGLE_FILE_MODE
+    data = request.json or {}
+    lang_folder = data.get('lang')
+    key = data.get('key')
+    ignore = bool(data.get('ignore', True))
+    
+    if not key:
+        return jsonify({"error": "Missing key."}), 400
+        
+    if IS_SINGLE_FILE_MODE:
+        tgt_path = TARGET_XML
+    else:
+        if not lang_folder:
+            return jsonify({"error": "Missing lang."}), 400
+        tgt_path = os.path.join(RES_DIR, lang_folder, "strings.xml")
+        
+    from ..parser.diff_engine import set_warning_suppression
+    set_warning_suppression(tgt_path, key, ignore)
+    return jsonify({"success": True, "key": key, "ignore_warnings": ignore})
 
 @app.route('/api/suggest', methods=['GET'])
 def get_suggestion():

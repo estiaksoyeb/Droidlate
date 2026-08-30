@@ -44,25 +44,14 @@ def extract_html_tags(s: str) -> list[str]:
         tags.append(normalized)
     return tags
 
-# Set of quantity categories where numerical placeholders can be legitimately omitted by target grammar (e.g., Arabic dual forms or fixed single count words)
-OPTIONAL_NUMERIC_PLURAL_QUANTITIES = {'one', 'two'}
-NUMERIC_PLACEHOLDER_TYPES = {'d', 'i', 'u', 'o', 'x', 'X'}
-
 def validate_placeholders(source_val: str, target_val: str, key: str | None = None) -> list[str]:
     """
-    Validates placeholder formatting, HTML tags, punctuation, and length ratio
-    between source and target values. Returns a list of distinct validation warnings.
+    Validates placeholder formatting and HTML tags between source and target values.
+    Returns a list of distinct validation warnings.
     """
     errors = []
     if not target_val:
         return errors
-
-    # Check if this is a plural item for 'one' or 'two' quantity
-    is_optional_numeric_plural = False
-    if key and '#plural#' in key:
-        quantity = key.split('#plural#')[-1]
-        if quantity in OPTIONAL_NUMERIC_PLURAL_QUANTITIES:
-            is_optional_numeric_plural = True
 
     # 1. Placeholder check
     src_pl = extract_placeholders(source_val)
@@ -76,9 +65,6 @@ def validate_placeholders(source_val: str, target_val: str, key: str | None = No
     
     for idx, src_type in src_map.items():
         if idx not in tgt_map:
-            # Omit missing placeholder warning if numeric placeholder in optional plural category (e.g. Arabic one/two)
-            if is_optional_numeric_plural and src_type.lower() in NUMERIC_PLACEHOLDER_TYPES:
-                continue
             errors.append(f"Missing placeholder %{idx}${src_type}")
         elif tgt_map[idx] != src_type:
             errors.append(f"Type mismatch for placeholder %{idx}: expected '{src_type}', got '{tgt_map[idx]}'")
@@ -162,19 +148,34 @@ def save_metadata(target_xml_path: str, metadata: dict) -> None:
     except Exception:
         pass
 
-def update_metadata_entry(target_xml_path: str, key: str, source_value: str, translated_value: str) -> None:
+def update_metadata_entry(target_xml_path: str, key: str, source_value: str, translated_value: str, ignore_warnings: bool | None = None) -> None:
     """Updates a single key's metadata entry and records it in Translation Memory."""
     metadata = load_metadata(target_xml_path)
     norm_src = normalize_source_string(source_value)
     src_hash = compute_source_hash(norm_src)
+    
+    current_entry = metadata.get(key, {})
+    if ignore_warnings is None:
+        ignore_warnings = current_entry.get("ignore_warnings", False)
+        
     metadata[key] = {
         "source_hash": src_hash,
-        "translated_value": translated_value
+        "translated_value": translated_value,
+        "ignore_warnings": bool(ignore_warnings)
     }
     save_metadata(target_xml_path, metadata)
     
     # Record mapping in Translation Memory
     update_tm_entry(target_xml_path, source_value, translated_value)
+
+def set_warning_suppression(target_xml_path: str, key: str, ignore: bool) -> bool:
+    """Explicitly sets or toggles the ignore_warnings flag for a key in the metadata ledger."""
+    metadata = load_metadata(target_xml_path)
+    if key not in metadata:
+        metadata[key] = {}
+    metadata[key]["ignore_warnings"] = bool(ignore)
+    save_metadata(target_xml_path, metadata)
+    return True
 
 def categorize_key(
     key: str,
@@ -195,8 +196,9 @@ def categorize_key(
         return 'untranslated'
 
     # 2. Warnings/Errors check
+    is_ignored = bool(metadata_entry.get("ignore_warnings", False)) if metadata_entry else False
     warnings = validate_placeholders(source_val, target_val, key=key)
-    if warnings:
+    if warnings and not is_ignored:
         return 'warnings'
 
     # 3. Outdated/Modified check

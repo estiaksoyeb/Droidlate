@@ -650,12 +650,41 @@ body {
     color: var(--info);
 }
 
+.validation-panel.ignored {
+    background-color: rgba(249, 226, 175, 0.1);
+    border: 1px solid rgba(249, 226, 175, 0.3);
+    color: var(--warning);
+}
+
 .validation-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
     font-size: 14px;
     font-weight: 500;
+}
+
+.validation-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-ignore-warning {
+    background-color: transparent;
+    border: 1px solid currentColor;
+    color: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.15s, opacity 0.15s;
+}
+
+.btn-ignore-warning:hover {
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
 .status-icon {
@@ -1336,7 +1365,13 @@ body {
     color: var(--warning);
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
+    align-items: flex-start;
+}
+
+.warning-ignored-tag {
+    color: var(--warning);
+    font-weight: 500;
 }
 
 .btn-save-plural {

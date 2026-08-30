@@ -124,8 +124,11 @@
                             <!-- Live Validation Block -->
                             <div id="validation-panel" class="validation-panel">
                                 <div class="validation-header">
-                                    <span id="validation-icon" class="status-icon">✓</span>
-                                    <span id="validation-summary" class="validation-summary">No mismatches found</span>
+                                    <div class="validation-header-left">
+                                        <span id="validation-icon" class="status-icon">✓</span>
+                                        <span id="validation-summary" class="validation-summary">No mismatches found</span>
+                                    </div>
+                                    <button id="btn-toggle-ignore-warning" class="btn-ignore-warning" style="display: none;">Ignore Warning</button>
                                 </div>
                                 <ul id="validation-errors-list" class="validation-errors-list">
                                     <!-- Dynamic list of error messages -->

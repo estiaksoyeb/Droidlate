@@ -83,6 +83,35 @@ class TestServerEndpoints(unittest.TestCase):
         })
         self.assertEqual(resp_del.status_code, 200)
 
+    def test_suppress_warning(self):
+        # Save translation with missing placeholder
+        self.client.post("/api/translate", json={
+            "lang": "values-es",
+            "key": "items#plural#other",
+            "value": "articulos en general"
+        })
+        
+        # Verify status is warnings initially
+        resp = self.client.get("/api/strings?lang=values-es")
+        strings = {s["key"]: s for s in resp.json["strings"]}
+        self.assertEqual(strings["items#plural#other"]["status"], "warnings")
+        self.assertFalse(strings["items#plural#other"]["ignore_warnings"])
+
+        # Ignore the warning
+        ignore_resp = self.client.post("/api/warnings/ignore", json={
+            "lang": "values-es",
+            "key": "items#plural#other",
+            "ignore": True
+        })
+        self.assertEqual(ignore_resp.status_code, 200)
+        self.assertTrue(ignore_resp.json["ignore_warnings"])
+
+        # Verify status resolves to translated
+        resp2 = self.client.get("/api/strings?lang=values-es")
+        strings2 = {s["key"]: s for s in resp2.json["strings"]}
+        self.assertEqual(strings2["items#plural#other"]["status"], "translated")
+        self.assertTrue(strings2["items#plural#other"]["ignore_warnings"])
+
     def test_static_files(self):
         with self.client.get("/") as resp_index:
             self.assertEqual(resp_index.status_code, 200)
