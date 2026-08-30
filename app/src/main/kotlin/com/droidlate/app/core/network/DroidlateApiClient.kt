@@ -197,10 +197,17 @@ class DroidlateApiClient(private val baseUrl: String = "http://127.0.0.1:5000/")
 
     suspend fun addLanguage(localeCode: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val req = AddLanguageApiRequest(locale = localeCode)
+            val trimmed = localeCode.trim()
+            val normalized = if (trimmed.matches(Regex("^[a-z]{2,3}-[a-zA-Z]{2}$"))) {
+                val parts = trimmed.split("-")
+                "${parts[0].lowercase()}-r${parts[1].uppercase()}"
+            } else {
+                trimmed
+            }
+            val req = AddLanguageApiRequest(locale = normalized)
             val response = apiService.addLanguage(req)
             if (response.isSuccessful && response.body()?.success == true) {
-                Result.success(response.body()?.folder ?: "values-$localeCode")
+                Result.success(response.body()?.folder ?: "values-$normalized")
             } else {
                 val err = response.body()?.error ?: response.errorBody()?.string() ?: "Failed to add language"
                 Result.failure(Exception(err))

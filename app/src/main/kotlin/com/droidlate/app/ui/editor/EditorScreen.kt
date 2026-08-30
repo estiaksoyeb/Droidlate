@@ -166,7 +166,7 @@ fun EditorScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
-                items(FilterCategory.values()) { cat ->
+                items(FilterCategory.entries) { cat ->
                     val count = when (cat) {
                         FilterCategory.ALL -> strings.size
                         FilterCategory.UNTRANSLATED -> strings.count { it.status == "untranslated" }

@@ -91,13 +91,17 @@ object PlaceholderValidator {
         }
 
         // 3. Check unescaped single quotes/apostrophes in Android XML strings
-        if (translation.contains("'") && !translation.contains("\\'") && !translation.startsWith("\"")) {
-            warnings.add(
-                ValidationWarning(
-                    type = WarningType.UNESCAPED_APOSTROPHE,
-                    message = "Apostrophe (') may require escaping (\\') in Android XML"
+        val isEnclosedInQuotes = translation.startsWith("\"") && translation.endsWith("\"") && translation.length >= 2
+        if (!isEnclosedInQuotes) {
+            val unescapedApostrophe = Pattern.compile("""(?<!\\)'""")
+            if (unescapedApostrophe.matcher(translation).find()) {
+                warnings.add(
+                    ValidationWarning(
+                        type = WarningType.UNESCAPED_APOSTROPHE,
+                        message = "Apostrophe (') may require escaping (\\') in Android XML"
+                    )
                 )
-            )
+            }
         }
 
         return warnings

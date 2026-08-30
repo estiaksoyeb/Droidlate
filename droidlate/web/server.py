@@ -303,6 +303,10 @@ def add_language():
         return jsonify({"error": "Missing locale code."}), 400
         
     locale = locale.strip()
+    if re.match(r"^[a-z]{2,3}-[a-zA-Z]{2}$", locale):
+        parts = locale.split('-')
+        locale = f"{parts[0].lower()}-r{parts[1].upper()}"
+
     # Validate locale pattern: standard ISO codes like es, zh, zh-rCN, values-xx compatible
     if not re.match(r"^[a-z]{2,3}(?:-r[a-zA-Z]{2,4})?$", locale):
         return jsonify({"error": "Invalid locale code format. Examples: 'es', 'zh-rCN', 'fr', 'pt-rBR'."}), 400

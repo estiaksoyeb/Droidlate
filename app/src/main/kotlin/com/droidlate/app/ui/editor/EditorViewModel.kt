@@ -208,8 +208,13 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 // Update local list state
                 _strings.value = _strings.value.map { entry ->
                     if (entry.key == key) {
-                        val newStatus = if (value.isNullOrBlank()) "untranslated" else "translated"
-                        entry.copy(translation = value ?: "", status = newStatus)
+                        val trimmed = value?.trim()
+                        val newStatus = when {
+                            trimmed.isNullOrEmpty() -> "untranslated"
+                            PlaceholderValidator.validate(entry.source, trimmed).isNotEmpty() -> "warnings"
+                            else -> "translated"
+                        }
+                        entry.copy(translation = trimmed ?: "", status = newStatus)
                     } else entry
                 }
                 onSuccess()
@@ -237,12 +242,14 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _isLoading.value = true
             val folder = _langFolder.value
+            val isLocallyAdded = _strings.value.any { it.key == key && it.translation.isEmpty() }
             val result = engineManager.apiClient.pruneString(folder, key)
-            result.onSuccess {
+            if (result.isSuccess || isLocallyAdded) {
                 _strings.value = _strings.value.filterNot { it.key == key }
                 onSuccess()
-            }.onFailure { ex ->
-                _errorMessage.value = ex.message ?: "Failed to prune string"
+            } else {
+                val ex = result.exceptionOrNull()
+                _errorMessage.value = ex?.message ?: "Failed to prune string"
             }
             _isLoading.value = false
         }

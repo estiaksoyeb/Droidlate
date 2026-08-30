@@ -246,11 +246,16 @@ function hideAddLanguageModal() {
 }
 
 function confirmAddLanguage() {
-    const locale = el.localeInput.value.trim();
+    let locale = el.localeInput.value.trim();
     if (!locale) {
         el.modalErrorMessage.textContent = 'Please enter a locale code.';
         el.modalErrorMessage.style.display = 'block';
         return;
+    }
+
+    if (/^[a-z]{2,3}-[a-zA-Z]{2}$/.test(locale)) {
+        const parts = locale.split('-');
+        locale = `${parts[0].toLowerCase()}-r${parts[1].toUpperCase()}`;
     }
 
     if (!/^[a-z]{2,3}(?:-r[a-zA-Z]{2,4})?$/.test(locale)) {
