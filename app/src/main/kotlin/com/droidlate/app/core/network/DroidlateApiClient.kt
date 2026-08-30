@@ -95,7 +95,8 @@ class DroidlateApiClient(private val baseUrl: String = "http://127.0.0.1:5000/")
                         translation = it.translation ?: "",
                         comment = it.comment,
                         status = it.status,
-                        attrib = it.attrib ?: emptyMap()
+                        attrib = it.attrib ?: emptyMap(),
+                        ignoreWarnings = it.ignoreWarnings ?: false
                     )
                 }
                 Result.success(mapped)
@@ -120,10 +121,17 @@ class DroidlateApiClient(private val baseUrl: String = "http://127.0.0.1:5000/")
         langFolder: String,
         key: String,
         value: String?,
-        sourceHash: String? = null
+        sourceHash: String? = null,
+        ignoreWarnings: Boolean? = null
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
-            val req = TranslateApiRequest(lang = langFolder, key = key, value = value, sourceHash = sourceHash)
+            val req = TranslateApiRequest(
+                lang = langFolder,
+                key = key,
+                value = value,
+                sourceHash = sourceHash,
+                ignoreWarnings = ignoreWarnings
+            )
             val response = apiService.saveTranslation(req)
             if (response.isSuccessful && response.body()?.success == true) {
                 Result.success(true)
@@ -225,6 +233,21 @@ class DroidlateApiClient(private val baseUrl: String = "http://127.0.0.1:5000/")
                 Result.success(true)
             } else {
                 val err = response.body()?.error ?: response.errorBody()?.string() ?: "Failed to prune string"
+                Result.failure(Exception(err))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun setWarningSuppression(langFolder: String, key: String, ignore: Boolean): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val req = SuppressWarningApiRequest(lang = langFolder, key = key, ignore = ignore)
+            val response = apiService.suppressWarning(req)
+            if (response.isSuccessful && response.body()?.success == true) {
+                Result.success(true)
+            } else {
+                val err = response.body()?.error ?: response.errorBody()?.string() ?: "Failed to update warning setting"
                 Result.failure(Exception(err))
             }
         } catch (e: Exception) {

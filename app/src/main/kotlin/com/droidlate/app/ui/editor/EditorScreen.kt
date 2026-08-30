@@ -46,6 +46,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -54,6 +55,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -247,6 +249,9 @@ fun EditorScreen(
                                                     snackbarHostState.showSnackbar("Pruned '${item.entry.key}'", duration = SnackbarDuration.Short)
                                                 }
                                             }
+                                        },
+                                        onToggleIgnoreWarning = { key, ignore ->
+                                            viewModel.toggleWarningSuppression(key, ignore)
                                         }
                                     )
                                 }
@@ -290,6 +295,9 @@ fun EditorScreen(
             },
             onAddQuantity = { baseKey, qty, src, hash ->
                 viewModel.addPluralQuantity(baseKey, qty, src, hash)
+            },
+            onToggleIgnoreWarning = { key, ignore ->
+                viewModel.toggleWarningSuppression(key, ignore)
             }
         )
     }
@@ -409,7 +417,8 @@ fun PluralEditorDialog(
     onRequestSuggestions: (key: String, source: String) -> Unit,
     onSaveQuantity: (key: String, value: String, hash: String) -> Unit,
     onPruneQuantity: (key: String) -> Unit,
-    onAddQuantity: (baseKey: String, quantity: String, source: String, hash: String) -> Unit
+    onAddQuantity: (baseKey: String, quantity: String, source: String, hash: String) -> Unit,
+    onToggleIgnoreWarning: (key: String, ignore: Boolean) -> Unit
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -456,26 +465,29 @@ fun PluralEditorDialog(
             ) {
                 item { Spacer(modifier = Modifier.height(4.dp)) }
 
-                // English Reference Card
+                // English Source Reference:
                 item {
                     Card(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Column(modifier = Modifier.padding(14.dp)) {
                             Text(
-                                text = "English Reference Forms",
-                                style = MaterialTheme.typography.labelMedium,
+                                text = "English Source Reference:",
+                                style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
                             entries.forEach { entry ->
                                 val qty = entry.key.substringAfter("#plural#", "other")
                                 Surface(
                                     color = MaterialTheme.colorScheme.surface,
-                                    shape = RoundedCornerShape(6.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(8.dp),
@@ -555,7 +567,8 @@ fun PluralEditorDialog(
                         },
                         onDelete = {
                             onPruneQuantity(entry.key)
-                        }
+                        },
+                        onToggleIgnoreWarning = onToggleIgnoreWarning
                     )
                 }
 
@@ -571,7 +584,8 @@ fun PluralQuantityEditorCard(
     suggestions: List<SuggestionItem>,
     onRequestSuggestions: () -> Unit,
     onSave: (String) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onToggleIgnoreWarning: (key: String, ignore: Boolean) -> Unit
 ) {
     val quantity = entry.key.substringAfter("#plural#", "other")
     var translationText by remember(entry.translation) { mutableStateOf(entry.translation) }
@@ -662,14 +676,47 @@ fun PluralQuantityEditorCard(
                 keyboardActions = KeyboardActions(onDone = { onSave(translationText) })
             )
 
-            // QA Warnings
+            // QA Warnings & Ignore Actions
             if (warnings.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                warnings.forEach { w ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Warning, contentDescription = null, tint = StatusYellow, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(w.message, style = MaterialTheme.typography.labelSmall, color = StatusYellow)
+                Spacer(modifier = Modifier.height(6.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    warnings.forEach { w ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = StatusYellow, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(w.message, style = MaterialTheme.typography.labelSmall, color = StatusYellow)
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (entry.ignoreWarnings) {
+                            Surface(
+                                color = StatusYellow.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "Warning Ignored",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = StatusYellow,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = { onToggleIgnoreWarning(entry.key, false) }) {
+                                Text("Re-enable", style = MaterialTheme.typography.labelSmall)
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { onToggleIgnoreWarning(entry.key, true) },
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text("Ignore Warning", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     }
                 }
             }
@@ -712,7 +759,8 @@ fun StringEditorCard(
     suggestions: List<SuggestionItem>,
     onRequestSuggestions: () -> Unit,
     onSave: (String) -> Unit,
-    onPrune: () -> Unit
+    onPrune: () -> Unit,
+    onToggleIgnoreWarning: (key: String, ignore: Boolean) -> Unit
 ) {
     val context = LocalContext.current
     var translationText by remember(entry.translation) { mutableStateOf(entry.translation) }
@@ -954,7 +1002,7 @@ fun StringEditorCard(
                         keyboardActions = KeyboardActions(onDone = { onSave(translationText) })
                     )
 
-                    // QA Warnings
+                    // QA Warnings & Ignore Actions
                     if (warnings.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -972,6 +1020,37 @@ fun StringEditorCard(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = StatusYellow
                                     )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (entry.ignoreWarnings) {
+                                    Surface(
+                                        color = StatusYellow.copy(alpha = 0.12f),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "Warning Ignored",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = StatusYellow,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    TextButton(onClick = { onToggleIgnoreWarning(entry.key, false) }) {
+                                        Text("Re-enable Warning", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                } else {
+                                    OutlinedButton(
+                                        onClick = { onToggleIgnoreWarning(entry.key, true) },
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text("Ignore Warning", style = MaterialTheme.typography.labelSmall)
+                                    }
                                 }
                             }
                         }

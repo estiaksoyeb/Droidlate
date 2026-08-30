@@ -47,7 +47,8 @@ data class StringEntry(
     val translation: String = "",
     val comment: String? = null,
     val status: String = "untranslated", // "translated", "untranslated", "outdated", "warnings", "orphaned", "readonly"
-    val attrib: Map<String, String> = emptyMap()
+    val attrib: Map<String, String> = emptyMap(),
+    val ignoreWarnings: Boolean = false
 ) {
     val isTranslatable: Boolean
         get() = attrib["translatable"] != "false"

@@ -203,15 +203,18 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _isSaving.value = true
             val folder = _langFolder.value
-            val result = engineManager.apiClient.saveTranslation(folder, key, value, sourceHash)
+            val currentEntry = _strings.value.find { it.key == key }
+            val isIgnored = currentEntry?.ignoreWarnings ?: false
+            val result = engineManager.apiClient.saveTranslation(folder, key, value, sourceHash, ignoreWarnings = isIgnored)
             result.onSuccess {
                 // Update local list state
                 _strings.value = _strings.value.map { entry ->
                     if (entry.key == key) {
                         val trimmed = value?.trim()
+                        val hasWarnings = if (trimmed.isNullOrEmpty()) false else PlaceholderValidator.validate(entry.source, trimmed).isNotEmpty()
                         val newStatus = when {
                             trimmed.isNullOrEmpty() -> "untranslated"
-                            PlaceholderValidator.validate(entry.source, trimmed).isNotEmpty() -> "warnings"
+                            hasWarnings && !entry.ignoreWarnings -> "warnings"
                             else -> "translated"
                         }
                         entry.copy(translation = trimmed ?: "", status = newStatus)
@@ -222,6 +225,29 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 _errorMessage.value = ex.message ?: "Failed to save translation"
             }
             _isSaving.value = false
+        }
+    }
+
+    fun toggleWarningSuppression(key: String, ignore: Boolean, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            val folder = _langFolder.value
+            val result = engineManager.apiClient.setWarningSuppression(folder, key, ignore)
+            result.onSuccess {
+                _strings.value = _strings.value.map { entry ->
+                    if (entry.key == key) {
+                        val hasWarnings = if (entry.translation.isEmpty()) false else PlaceholderValidator.validate(entry.source, entry.translation).isNotEmpty()
+                        val newStatus = when {
+                            entry.translation.isEmpty() -> "untranslated"
+                            hasWarnings && !ignore -> "warnings"
+                            else -> "translated"
+                        }
+                        entry.copy(ignoreWarnings = ignore, status = newStatus)
+                    } else entry
+                }
+                onComplete?.invoke()
+            }.onFailure { ex ->
+                _errorMessage.value = ex.message ?: "Failed to update warning setting"
+            }
         }
     }
 

@@ -40,14 +40,16 @@ data class StringApiItem(
     @SerializedName("translation") val translation: String?,
     @SerializedName("comment") val comment: String?,
     @SerializedName("status") val status: String,
-    @SerializedName("attrib") val attrib: Map<String, String>?
+    @SerializedName("attrib") val attrib: Map<String, String>?,
+    @SerializedName("ignore_warnings") val ignoreWarnings: Boolean? = false
 )
 
 data class TranslateApiRequest(
     @SerializedName("lang") val lang: String?,
     @SerializedName("key") val key: String,
     @SerializedName("value") val value: String?,
-    @SerializedName("source_hash") val sourceHash: String? = null
+    @SerializedName("source_hash") val sourceHash: String? = null,
+    @SerializedName("ignore_warnings") val ignoreWarnings: Boolean? = null
 )
 
 data class AddLanguageApiRequest(
@@ -57,6 +59,12 @@ data class AddLanguageApiRequest(
 data class PruneApiRequest(
     @SerializedName("lang") val lang: String?,
     @SerializedName("key") val key: String
+)
+
+data class SuppressWarningApiRequest(
+    @SerializedName("lang") val lang: String?,
+    @SerializedName("key") val key: String,
+    @SerializedName("ignore") val ignore: Boolean = true
 )
 
 data class SuggestionApiResponse(
@@ -88,6 +96,9 @@ interface DroidlateApiService {
 
     @POST("/api/translate")
     suspend fun saveTranslation(@Body request: TranslateApiRequest): Response<GenericApiResponse>
+
+    @POST("/api/warnings/ignore")
+    suspend fun suppressWarning(@Body request: SuppressWarningApiRequest): Response<GenericApiResponse>
 
     @GET("/api/suggest")
     suspend fun getSuggestions(
