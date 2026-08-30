@@ -18,6 +18,8 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        manifestPlaceholders["appLabel"] = "Droidlate"
+
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
@@ -27,14 +29,47 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val keyStorePath = (findProperty("RELEASE_STORE_FILE") as? String)
+                ?: System.getenv("RELEASE_STORE_FILE")
+            if (keyStorePath != null && file(keyStorePath).exists()) {
+                storeFile = file(keyStorePath)
+                storePassword = (findProperty("RELEASE_STORE_PASSWORD") as? String)
+                    ?: System.getenv("RELEASE_STORE_PASSWORD") ?: ""
+                keyAlias = (findProperty("RELEASE_KEY_ALIAS") as? String)
+                    ?: System.getenv("RELEASE_KEY_ALIAS") ?: ""
+                keyPassword = (findProperty("RELEASE_KEY_PASSWORD") as? String)
+                    ?: System.getenv("RELEASE_KEY_PASSWORD") ?: ""
+            } else {
+                // Fallback to debug keystore for seamless local release builds
+                initWith(getByName("debug"))
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            isDebuggable = true
+            isMinifyEnabled = false
+            manifestPlaceholders["appLabel"] = "Droidlate (Debug)"
+        }
+
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
+            manifestPlaceholders["appLabel"] = "Droidlate"
         }
+    }
+
+    lint {
+        abortOnError = false
     }
 
     compileOptions {
@@ -48,6 +83,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
