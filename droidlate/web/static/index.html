@@ -80,9 +80,16 @@
                         <!-- Key Metadata Card -->
                         <div class="metadata-card">
                             <div class="meta-header">
-                                <button id="btn-back-sidebar" class="btn-secondary mobile-only">← Keys</button>
-                                <span id="current-key-name" class="key-name">string:key_name</span>
-                                <span id="current-key-status" class="status-badge">UNTRANSLATED</span>
+                                <div class="meta-header-left">
+                                    <button id="btn-back-sidebar" class="btn-secondary mobile-only">← Keys</button>
+                                    <span id="current-key-name" class="key-name">string:key_name</span>
+                                </div>
+                                <div class="meta-header-right">
+                                    <span id="current-key-status" class="status-badge">UNTRANSLATED</span>
+                                    <button id="btn-edit-plural-group" class="btn-secondary btn-edit-plural" style="display: none;">
+                                        Edit Plural Forms
+                                    </button>
+                                </div>
                             </div>
                             <div class="comment-block">
                                 <span class="block-label">Developer Comment</span>
@@ -182,6 +189,25 @@
             <div class="modal-footer">
                 <button id="btn-cancel-modal" class="btn-secondary">Cancel</button>
                 <button id="btn-confirm-modal" class="btn-primary">Add Language</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plural Editor Modal -->
+    <div id="plural-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <div>
+                    <h3 id="plural-modal-title" class="font-monospace">Plural Key</h3>
+                    <div id="plural-modal-subtitle" class="modal-subtitle">0/0 forms translated</div>
+                </div>
+                <button id="plural-modal-close" class="modal-close-btn">&times;</button>
+            </div>
+            <div id="plural-modal-body" class="modal-body modal-scrollable">
+                <!-- Injected dynamically via openPluralEditor() -->
+            </div>
+            <div class="modal-footer">
+                <button id="btn-close-plural-modal" class="btn-secondary">Close</button>
             </div>
         </div>
     </div>

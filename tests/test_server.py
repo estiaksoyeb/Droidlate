@@ -83,5 +83,18 @@ class TestServerEndpoints(unittest.TestCase):
         })
         self.assertEqual(resp_del.status_code, 200)
 
+    def test_static_files(self):
+        with self.client.get("/") as resp_index:
+            self.assertEqual(resp_index.status_code, 200)
+            self.assertIn(b"plural-modal", resp_index.data)
+
+        with self.client.get("/app.js") as resp_js:
+            self.assertEqual(resp_js.status_code, 200)
+            self.assertIn(b"openPluralEditor", resp_js.data)
+
+        with self.client.get("/style.css") as resp_css:
+            self.assertEqual(resp_css.status_code, 200)
+            self.assertIn(b"plural-ref-card", resp_css.data)
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,10 @@ let state = {
     filteredStrings: []   // Filtered strings list
 };
 
+// Constants
+const CLDR_PLURAL_QUANTITIES = ['zero', 'one', 'two', 'few', 'many', 'other'];
+let activePluralKey = null;
+
 // UI Elements
 const el = {
     projectPath: document.getElementById('project-path-display'),
@@ -22,6 +26,7 @@ const el = {
     keysList: document.getElementById('keys-list'),
     currentKeyName: document.getElementById('current-key-name'),
     currentKeyStatus: document.getElementById('current-key-status'),
+    btnEditPluralGroup: document.getElementById('btn-edit-plural-group'),
     currentKeyComment: document.getElementById('current-key-comment'),
     currentKeyAttribs: document.getElementById('current-key-attribs'),
     btnCopySource: document.getElementById('btn-copy-source'),
@@ -46,8 +51,24 @@ const el = {
     btnCancelModal: document.getElementById('btn-cancel-modal'),
     btnConfirmModal: document.getElementById('btn-confirm-modal'),
     localeInput: document.getElementById('locale-input'),
-    modalErrorMessage: document.getElementById('modal-error-message')
+    modalErrorMessage: document.getElementById('modal-error-message'),
+    pluralModal: document.getElementById('plural-modal'),
+    pluralModalTitle: document.getElementById('plural-modal-title'),
+    pluralModalSubtitle: document.getElementById('plural-modal-subtitle'),
+    pluralModalBody: document.getElementById('plural-modal-body'),
+    pluralModalClose: document.getElementById('plural-modal-close'),
+    btnClosePluralModal: document.getElementById('btn-close-plural-modal')
 };
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 // Formatting helpers for plurals/arrays keys
 function formatKeyName(key) {
@@ -132,14 +153,26 @@ function setupEventListeners() {
             }
         }
         
-        // Escape to exit editor / go back to sidebar on mobile
-        if (e.key === 'Escape' && state.activeLang) {
-            e.preventDefault();
-            if (window.innerWidth < 768 && el.editorLayoutContainer.classList.contains('show-workspace')) {
-                el.editorLayoutContainer.classList.remove('show-workspace');
-                el.editorLayoutContainer.classList.add('show-sidebar');
-            } else {
-                showDashboard();
+        // Escape to close modals or exit editor / go back to sidebar on mobile
+        if (e.key === 'Escape') {
+            if (el.pluralModal && el.pluralModal.style.display === 'flex') {
+                e.preventDefault();
+                hidePluralEditor();
+                return;
+            }
+            if (el.addLanguageModal && el.addLanguageModal.style.display === 'flex') {
+                e.preventDefault();
+                hideAddLanguageModal();
+                return;
+            }
+            if (state.activeLang) {
+                e.preventDefault();
+                if (window.innerWidth < 768 && el.editorLayoutContainer.classList.contains('show-workspace')) {
+                    el.editorLayoutContainer.classList.remove('show-workspace');
+                    el.editorLayoutContainer.classList.add('show-sidebar');
+                } else {
+                    showDashboard();
+                }
             }
         }
 
@@ -181,6 +214,22 @@ function setupEventListeners() {
                 confirmAddLanguage();
             }
         });
+    }
+
+    // Plural modal events
+    if (el.btnEditPluralGroup) {
+        el.btnEditPluralGroup.addEventListener('click', () => {
+            if (state.currentKey) {
+                const baseKey = state.currentKey.includes('#plural#') ? state.currentKey.split('#plural#')[0] : state.currentKey;
+                openPluralEditor(baseKey);
+            }
+        });
+    }
+    if (el.pluralModalClose) {
+        el.pluralModalClose.addEventListener('click', hidePluralEditor);
+    }
+    if (el.btnClosePluralModal) {
+        el.btnClosePluralModal.addEventListener('click', hidePluralEditor);
     }
 }
 
@@ -512,6 +561,14 @@ function selectKey(key) {
     el.currentKeyName.textContent = formatKeyNamePlainText(item.key);
     el.currentKeyStatus.textContent = item.status.toUpperCase();
     el.currentKeyStatus.className = `status-badge ${item.status.toUpperCase()}`;
+    
+    if (el.btnEditPluralGroup) {
+        if (item.key.includes('#plural#')) {
+            el.btnEditPluralGroup.style.display = 'inline-flex';
+        } else {
+            el.btnEditPluralGroup.style.display = 'none';
+        }
+    }
     
     if (item.comment) {
         el.currentKeyComment.textContent = item.comment;
@@ -910,6 +967,314 @@ function pruneCurrentTranslation() {
         alert(`Pruning failed: ${err.message}`);
     });
 }
+
+// 6. Plural Group & CLDR Quantities Modal Editor
+function openPluralEditor(baseKey) {
+    activePluralKey = baseKey;
+    
+    // Find all entries for this plural
+    let groupEntries = state.strings.filter(s => s.key.startsWith(`${baseKey}#plural#`));
+    
+    // If no entries with #plural# found, check if baseKey is in strings
+    if (groupEntries.length === 0) {
+        const directEntry = state.strings.find(s => s.key === baseKey);
+        if (directEntry) {
+            groupEntries.push(directEntry);
+        }
+    }
+    
+    if (groupEntries.length === 0) {
+        return;
+    }
+    
+    el.pluralModalTitle.textContent = baseKey;
+    
+    // Sort quantities according to CLDR standard order
+    const qtyOrder = { 'zero': 0, 'one': 1, 'two': 2, 'few': 3, 'many': 4, 'other': 5 };
+    groupEntries.sort((a, b) => {
+        const qA = a.key.includes('#plural#') ? a.key.split('#plural#')[1] : 'other';
+        const qB = b.key.includes('#plural#') ? b.key.split('#plural#')[1] : 'other';
+        return (qtyOrder[qA] ?? 99) - (qtyOrder[qB] ?? 99);
+    });
+
+    const translatedCount = groupEntries.filter(e => e.status === 'translated' || (e.translation && e.translation.trim().length > 0)).length;
+    el.pluralModalSubtitle.textContent = `${translatedCount}/${groupEntries.length} forms translated (${state.activeLang || 'target'})`;
+
+    const existingQuantities = groupEntries.map(e => e.key.includes('#plural#') ? e.key.split('#plural#')[1] : 'other');
+    const missingQuantities = CLDR_PLURAL_QUANTITIES.filter(q => !existingQuantities.includes(q));
+
+    let html = '';
+
+    // 1. English Source Reference Card
+    html += `
+        <div class="plural-ref-card">
+            <div class="plural-ref-title">English Source Reference</div>
+            <div class="plural-ref-list">
+                ${groupEntries.map(e => {
+                    const qty = e.key.includes('#plural#') ? e.key.split('#plural#')[1] : 'other';
+                    return `
+                        <div class="plural-ref-row">
+                            <span class="plural-qty-badge ${qty === 'other' ? 'required' : ''}">${qty}</span>
+                            <span class="plural-ref-text">${escapeHtml(e.source || '(No source text)')}</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+
+    // 2. Add Missing Quantities Section
+    if (missingQuantities.length > 0) {
+        html += `
+            <div class="plural-add-section">
+                <span class="plural-add-label">Add CLDR plural forms for this language (e.g. Arabic, Slavic):</span>
+                <div class="plural-chips-container">
+                    ${missingQuantities.map(qty => `
+                        <button type="button" class="plural-chip-btn" onclick="addPluralQuantity('${escapeHtml(baseKey)}', '${qty}')">
+                            + ${qty}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // 3. Target Quantity Translation Rows
+    groupEntries.forEach(entry => {
+        const qty = entry.key.includes('#plural#') ? entry.key.split('#plural#')[1] : 'other';
+        const isFallback = qty === 'other';
+        const warnings = runValidation(entry.source, entry.translation);
+        
+        html += `
+            <div class="plural-form-card ${warnings.length > 0 ? 'has-warnings' : ''}" id="plural-card-${escapeHtml(entry.key)}">
+                <div class="plural-form-header">
+                    <div class="plural-form-title">
+                        <span class="plural-qty-badge ${isFallback ? 'required' : ''}">quantity="${qty}"</span>
+                        ${isFallback ? '<span class="plural-fallback-tag">(Required fallback)</span>' : ''}
+                    </div>
+                    <div class="plural-form-actions">
+                        ${!isFallback ? `
+                            <button type="button" class="btn-delete-plural" title="Delete this plural form" onclick="deletePluralForm('${escapeHtml(entry.key)}')">
+                                Delete
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <div class="plural-input-wrapper">
+                    <textarea class="plural-input" id="plural-input-${escapeHtml(entry.key)}" 
+                              rows="2"
+                              data-key="${escapeHtml(entry.key)}"
+                              placeholder="Translation for '${qty}'...">${escapeHtml(entry.translation || '')}</textarea>
+                </div>
+
+                <div class="plural-form-footer">
+                    <div class="plural-form-validation" id="plural-val-${escapeHtml(entry.key)}">
+                        ${warnings.map(w => `<span>⚠ ${escapeHtml(w)}</span>`).join('')}
+                    </div>
+                    <button type="button" class="btn-save-plural" id="btn-save-plural-${escapeHtml(entry.key)}" onclick="savePluralForm('${escapeHtml(entry.key)}')">
+                        Save
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+
+    el.pluralModalBody.innerHTML = html;
+
+    // Attach live validation event listeners to modal textareas
+    groupEntries.forEach(entry => {
+        const input = document.getElementById(`plural-input-${entry.key}`);
+        if (input) {
+            input.addEventListener('input', (e) => {
+                const card = document.getElementById(`plural-card-${entry.key}`);
+                const valContainer = document.getElementById(`plural-val-${entry.key}`);
+                const currentVal = e.target.value;
+                const warns = runValidation(entry.source, currentVal);
+                
+                if (card) {
+                    if (warns.length > 0) card.classList.add('has-warnings');
+                    else card.classList.remove('has-warnings');
+                }
+                if (valContainer) {
+                    valContainer.innerHTML = warns.map(w => `<span>⚠ ${escapeHtml(w)}</span>`).join('');
+                }
+            });
+        }
+    });
+
+    el.pluralModal.style.display = 'flex';
+}
+
+function hidePluralEditor() {
+    el.pluralModal.style.display = 'none';
+    activePluralKey = null;
+}
+
+function savePluralForm(key) {
+    const input = document.getElementById(`plural-input-${key}`);
+    if (!input) return;
+    const value = input.value.trim();
+    const btn = document.getElementById(`btn-save-plural-${key}`);
+    const entry = state.strings.find(s => s.key === key);
+    if (!entry) return;
+
+    const warnings = runValidation(entry.source, value);
+    if (warnings.length > 0) {
+        const confirmSave = confirm(
+            `Placeholder warnings for quantity "${key.split('#plural#')[1] || 'other'}":\n\n${warnings.map(w => '• ' + w).join('\n')}\n\nDo you want to save anyway?`
+        );
+        if (!confirmSave) return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+    }
+
+    fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            lang: state.activeLang,
+            key: key,
+            value: value,
+            source_hash: entry.source_hash || ''
+        })
+    })
+    .then(res => {
+        if (res.status === 409) {
+            return res.json().then(data => {
+                throw new Error(data.message || "Source string modified.");
+            });
+        }
+        return res.json();
+    })
+    .then(data => {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Saved ✓';
+            btn.classList.add('saved');
+            setTimeout(() => {
+                btn.textContent = 'Save';
+                btn.classList.remove('saved');
+            }, 2000);
+        }
+
+        if (data.success) {
+            entry.translation = value;
+            if (!value) {
+                entry.status = 'untranslated';
+            } else {
+                entry.status = warnings.length > 0 ? 'warnings' : 'translated';
+            }
+
+            // Sync with main editor workspace if this key is currently selected
+            if (state.currentKey === key) {
+                el.translationInput.value = value;
+                updateValidationUI(warnings);
+                el.currentKeyStatus.textContent = entry.status.toUpperCase();
+                el.currentKeyStatus.className = `status-badge ${entry.status.toUpperCase()}`;
+            }
+
+            applySidebarFilters();
+            
+            // Update modal subtitle count
+            if (activePluralKey) {
+                const groupEntries = state.strings.filter(s => s.key.startsWith(`${activePluralKey}#plural#`) || s.key === activePluralKey);
+                const translatedCount = groupEntries.filter(e => e.status === 'translated' || (e.translation && e.translation.trim().length > 0)).length;
+                el.pluralModalSubtitle.textContent = `${translatedCount}/${groupEntries.length} forms translated (${state.activeLang || 'target'})`;
+            }
+        } else {
+            alert('Error writing translation to XML.');
+        }
+    })
+    .catch(err => {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Save';
+        }
+        alert(`Save failed: ${err.message}`);
+    });
+}
+
+function deletePluralForm(key) {
+    const qty = key.split('#plural#')[1] || key;
+    if (!confirm(`Remove plural form quantity="${qty}" from this language?`)) return;
+
+    fetch('/api/prune', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            lang: state.activeLang,
+            key: key
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            state.strings = state.strings.filter(s => s.key !== key);
+            applySidebarFilters();
+
+            // If the deleted key was active in workspace, select another key
+            if (state.currentKey === key) {
+                if (state.filteredStrings.length > 0) {
+                    selectKey(state.filteredStrings[0].key);
+                }
+            }
+
+            if (activePluralKey) {
+                openPluralEditor(activePluralKey);
+            }
+        } else {
+            alert('Error deleting plural form.');
+        }
+    })
+    .catch(err => {
+        alert(`Deletion failed: ${err.message}`);
+    });
+}
+
+function addPluralQuantity(baseKey, quantity) {
+    const newKey = `${baseKey}#plural#${quantity}`;
+    if (state.strings.some(s => s.key === newKey)) {
+        return;
+    }
+
+    // Find any existing sibling plural entry to copy reference info
+    const ref = state.strings.find(s => s.key.startsWith(`${baseKey}#plural#`) || s.key === baseKey);
+    const refSource = ref ? ref.source : '';
+    const refHash = ref ? ref.source_hash : '';
+    const refComment = ref ? ref.comment : null;
+    const refAttrib = ref ? { ...ref.attrib } : {};
+
+    const newEntry = {
+        key: newKey,
+        source: refSource,
+        source_hash: refHash,
+        translation: '',
+        comment: refComment,
+        status: 'untranslated',
+        attrib: refAttrib
+    };
+
+    state.strings.push(newEntry);
+    applySidebarFilters();
+    openPluralEditor(baseKey);
+
+    // Focus on the newly created textarea
+    setTimeout(() => {
+        const input = document.getElementById(`plural-input-${newKey}`);
+        if (input) input.focus();
+    }, 100);
+}
+
+// Expose modal handlers to window for HTML onclick attributes
+window.openPluralEditor = openPluralEditor;
+window.hidePluralEditor = hidePluralEditor;
+window.savePluralForm = savePluralForm;
+window.deletePluralForm = deletePluralForm;
+window.addPluralQuantity = addPluralQuantity;
 
 // App Initialization Entry
 document.addEventListener('DOMContentLoaded', () => {
