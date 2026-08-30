@@ -5,9 +5,22 @@ name: Android App CI & Release Build
   push:
     branches: [master]
     tags:
+      - 'app-v*'
       - 'v*'
   pull_request:
     branches: [master]
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub Release draft with built APKs'
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Release Tag Name (e.g. app-v1.0.0)'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   build-apk:
@@ -67,9 +80,13 @@ jobs:
           if-no-files-found: error
 
   publish-github-release:
-    name: Attach APKs to GitHub Release
+    name: Attach APKs to GitHub Release Draft
     needs: build-apk
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      startsWith(github.ref, 'refs/tags/app-v') ||
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' &&
+      inputs.create_release == true)
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -87,16 +104,26 @@ jobs:
           name: droidlate-app-release
           path: ./apks
 
-      - name: Rename APKs with Version Tag
+      - name: Determine Release Tag and Rename APKs
         run: |
-          TAG_NAME="${GITHUB_REF#refs/tags/}"
-          mv ./apks/app-debug.apk ./apks/droidlate-${TAG_NAME}-debug.apk
-          mv ./apks/app-release.apk ./apks/droidlate-${TAG_NAME}-release.apk
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && \
+             [ -n "${{ inputs.release_tag }}" ]; then
+            TAG_NAME="${{ inputs.release_tag }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          else
+            TAG_NAME="manual-build-${GITHUB_SHA::7}"
+          fi
+          echo "TAG_NAME=${TAG_NAME}" >> "$GITHUB_ENV"
+          mv ./apks/app-debug.apk "./apks/droidlate-${TAG_NAME}-debug.apk"
+          mv ./apks/app-release.apk "./apks/droidlate-${TAG_NAME}-release.apk"
           ls -la ./apks
 
-      - name: Upload Assets to GitHub Release
+      - name: Upload Assets to GitHub Release (Draft)
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG_NAME }}
+          draft: true
           files: |
             ./apks/droidlate-*-debug.apk
             ./apks/droidlate-*-release.apk

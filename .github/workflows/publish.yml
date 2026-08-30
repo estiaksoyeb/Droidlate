@@ -5,6 +5,8 @@ name: Publish to PyPI
   push:
     tags:
       - 'v*'  # Trigger when pushing version tags like v1.2.0
+      - 'cli-v*'  # Or explicit CLI tags like cli-v1.2.0
+  workflow_dispatch:
 
 jobs:
   build:
