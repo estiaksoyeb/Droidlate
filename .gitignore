@@ -23,3 +23,16 @@ test_resources/
 .venv/
 venv/
 .env
+
+# Ignore Android / Gradle build artifacts
+.gradle/
+app/build/
+local.properties
+.idea/
+.kotlin/
+*.apk
+*.aab
+captures/
+.externalNativeBuild/
+.cxx/
+

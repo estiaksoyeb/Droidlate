@@ -89,7 +89,7 @@ droidlate --port 8080
 ## Repository Structure
 
 ```text
-├── droidlate/                     # Package root
+├── droidlate/                     # 🐍 Python Core (CLI & Web Engine)
 │   ├── parser/
 │   │   ├── xml_parser.py          # Expat character-level round-trip parser
 │   │   └── diff_engine.py         # Hashing, validation, and status engines
@@ -100,10 +100,25 @@ droidlate --port 8080
 │   │   └── static/                # Single Page Web App (HTML, CSS, JS)
 │   ├── cli_wizard.py              # CLI console loop wizard
 │   └── main.py                    # Command entry point
-├── pyproject.toml                 # Package configuration and script registration
-├── requirements.txt               # App dependencies
+├── app/                           # 📱 Native Android App (Jetpack Compose)
+│   ├── src/main/kotlin/           # Kotlin Compose UI & ViewModels
+│   ├── src/main/res/              # Android resource files
+│   └── build.gradle.kts           # Chaquopy embeds ./droidlate directly
+├── docs/                          # Architecture, specs & setup guides
+├── pyproject.toml                 # Package configuration (publishes ONLY droidlate/ to PyPI)
+├── requirements.txt               # Python app dependencies
 └── README.md                      # This documentation
 ```
+
+---
+
+## 📱 Native Android App
+
+In addition to the Python CLI & Web interface, Droidlate includes a native Android application built with **Jetpack Compose** and embedded Python via **Chaquopy**.
+
+* **Build APK:** `./gradlew assembleDebug`
+* **Import from GitHub:** Paste any public Android repo URL to download, scan, and translate offline.
+* **Export ZIP:** One-tap export of modified translation resources and metadata ledger via Android ShareSheet.
 
 ---
 

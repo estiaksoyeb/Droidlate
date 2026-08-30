@@ -239,18 +239,50 @@ def get_strings():
             "attrib": entry.attrib
         })
         
-    # 2. Add orphaned entries (exists in target but no longer in source)
+    # 2. Add target entries not in source entries (orphans or target-specific plural/array forms)
     for key in target_entries.keys():
-        if is_key_orphaned(key, source_entries):
-            strings_list.append({
-                "key": key,
-                "source": "(Removed from English source XML file)",
-                "source_hash": "",
-                "translation": target_entries[key].value,
-                "comment": "Orphaned key (no longer exists in source strings.xml)",
-                "status": "orphaned",
-                "attrib": target_entries[key].attrib
-            })
+        if key not in source_entries:
+            if is_key_orphaned(key, source_entries):
+                strings_list.append({
+                    "key": key,
+                    "source": "(Removed from English source XML file)",
+                    "source_hash": "",
+                    "translation": target_entries[key].value,
+                    "comment": "Orphaned key (no longer exists in source strings.xml)",
+                    "status": "orphaned",
+                    "attrib": target_entries[key].attrib
+                })
+            else:
+                # Valid target plural or array form (e.g. Russian few/many, Arabic dual)
+                ref_entry = None
+                if '#plural#' in key:
+                    base_key = key.split('#plural#')[0]
+                    for k, e in source_entries.items():
+                        if k.startswith(f"{base_key}#plural#"):
+                            ref_entry = e
+                            break
+                elif '#array#' in key:
+                    base_key = key.split('#array#')[0]
+                    for k, e in source_entries.items():
+                        if k.startswith(f"{base_key}#array#"):
+                            ref_entry = e
+                            break
+                
+                ref_val = ref_entry.value if ref_entry else ""
+                ref_hash = compute_source_hash(normalize_source_string(ref_val)) if ref_val else ""
+                tgt_val = target_entries[key].value
+                meta_val = metadata.get(key)
+                status = categorize_key(key, ref_val, tgt_val, meta_val, target_entries[key].attrib)
+                
+                strings_list.append({
+                    "key": key,
+                    "source": ref_val,
+                    "source_hash": ref_hash,
+                    "translation": tgt_val,
+                    "comment": ref_entry.comment if ref_entry else None,
+                    "status": status,
+                    "attrib": target_entries[key].attrib
+                })
         
     return jsonify({
         "locale": lang_folder or os.path.basename(os.path.dirname(tgt_path)),
@@ -313,17 +345,31 @@ def save_translation():
 
     # Fetch original attributes
     source_entries = parse_strings_xml(src_path)
-    if key not in source_entries:
+    src_entry = None
+    if key in source_entries:
+        src_entry = source_entries[key]
+    elif '#plural#' in key:
+        base_key = key.split('#plural#')[0]
+        for k, entry in source_entries.items():
+            if k == base_key or k.startswith(f"{base_key}#plural#"):
+                src_entry = entry
+                break
+    elif '#array#' in key:
+        base_key = key.split('#array#')[0]
+        for k, entry in source_entries.items():
+            if k == base_key or k.startswith(f"{base_key}#array#"):
+                src_entry = entry
+                break
+
+    if src_entry is None:
         return jsonify({"error": f"Key {key} does not exist in source."}), 404
-        
-    src_entry = source_entries[key]
     
     # Stale-state check: verify client hash matches current source hash
     if client_source_hash:
         from ..parser.diff_engine import normalize_source_string, compute_source_hash
         current_norm = normalize_source_string(src_entry.value)
         current_hash = compute_source_hash(current_norm)
-        if client_source_hash != current_hash:
+        if client_source_hash != current_hash and client_source_hash != "":
             return jsonify({
                 "error": "stale_source",
                 "message": "The source string has been modified by another process. Please refresh the page.",

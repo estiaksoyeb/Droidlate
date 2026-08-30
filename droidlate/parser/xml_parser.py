@@ -67,7 +67,8 @@ def unescape_android_string(raw_val: str) -> str:
 def escape_android_string(val: str) -> str:
     """
     Escapes a plain string from the UI into a valid Android strings.xml value.
-    - Escapes XML entities: & -> &amp;, < -> &lt;, > -> &gt;
+    - Preserves valid XML/HTML markup tags (e.g. <b>, <i>, <u>, <font ...>, <xliff:g ...>) and entities (&amp;, &lt;, &gt;, &quot;, &apos;).
+    - Escapes stray/unmatched XML characters: & -> &amp;, < -> &lt;, > -> &gt;
     - Escapes Android characters: ' -> \\', " -> \\"
     - Escapes control characters: newlines -> \\n, tabs -> \\t
     - Escapes leading @ and ? -> \\@ and \\?
@@ -75,28 +76,52 @@ def escape_android_string(val: str) -> str:
     if not val:
         return ""
 
-    # 1. Escape XML characters
-    escaped = val.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
-    # 2. Escape quotes and control characters
-    result = []
-    for idx, char in enumerate(escaped):
-        if char == "'":
-            result.append("\\'")
-        elif char == '"':
-            result.append('\\"')
-        elif char == '\n':
-            result.append('\\n')
-        elif char == '\t':
-            result.append('\\t')
-        elif char == '\\':
-            result.append('\\\\')
-        elif (char == '@' or char == '?') and idx == 0:
-            result.append('\\' + char)
+    tokens = []
+    last_end = 0
+    
+    # Combined pattern for XML entity or tag
+    combined_pattern = re.compile(r"(&(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);|</?[a-zA-Z0-9_:-]+(?:\s+[^>]*)?/?>)")
+    
+    for match in combined_pattern.finditer(val):
+        start, end = match.span()
+        if start > last_end:
+            tokens.append(("text", val[last_end:start]))
+        matched_str = match.group(0)
+        tokens.append(("tag_or_entity", matched_str))
+        last_end = end
+    if last_end < len(val):
+        tokens.append(("text", val[last_end:]))
+        
+    result_parts = []
+    is_start = True
+    
+    for token_type, token_val in tokens:
+        if token_type == "tag_or_entity":
+            result_parts.append(token_val)
+            is_start = False
         else:
-            result.append(char)
-            
-    return "".join(result)
+            escaped_text = token_val.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            escaped_chars = []
+            for idx, char in enumerate(escaped_text):
+                if char == "'":
+                    escaped_chars.append("\\'")
+                elif char == '"':
+                    escaped_chars.append('\\"')
+                elif char == '\n':
+                    escaped_chars.append('\\n')
+                elif char == '\t':
+                    escaped_chars.append('\\t')
+                elif char == '\\':
+                    escaped_chars.append('\\\\')
+                elif (char == '@' or char == '?') and is_start and idx == 0:
+                    escaped_chars.append('\\' + char)
+                else:
+                    escaped_chars.append(char)
+            result_parts.append("".join(escaped_chars))
+            if token_val:
+                is_start = False
+                
+    return "".join(result_parts)
 
 def parse_strings_xml(file_path: str) -> dict[str, StringEntry]:
     """
