@@ -52,7 +52,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun downloadRepository(onSuccess: (ProjectInfo) -> Unit) {
         val coords = downloader.parseRepoUrl(_repoUrlInput.value)
         if (coords == null) {
-            _ingestionState.value = IngestionState.Error("Invalid GitHub repository URL or shorthand. Example: skydoves/Pokedex")
+            _ingestionState.value = IngestionState.Error("Invalid GitHub repository URL or shorthand. Example: estiaksoyeb/TypeAssist")
             return
         }
 

@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -72,6 +73,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.core.content.ContextCompat
+import com.droidlate.app.R
 import com.droidlate.app.core.model.IngestionState
 import com.droidlate.app.core.model.ProjectInfo
 import java.text.SimpleDateFormat
@@ -90,7 +97,22 @@ fun HomeScreen(
     val recentProjects by viewModel.recentProjects.collectAsState()
 
     var showHelpDialog by remember { mutableStateOf(false) }
-    var isQuickGuideExpanded by remember { mutableStateOf(false) }
+
+    val appIconBitmap: ImageBitmap? = remember(context) {
+        try {
+            val drawable = ContextCompat.getDrawable(context, R.mipmap.ic_launcher)
+                ?: context.packageManager.getApplicationIcon(context.packageName)
+            val w = drawable.intrinsicWidth.coerceAtLeast(108)
+            val h = drawable.intrinsicHeight.coerceAtLeast(108)
+            val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, w, h)
+            drawable.draw(canvas)
+            bitmap.asImageBitmap()
+        } catch (_: Throwable) {
+            null
+        }
+    }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -107,19 +129,29 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Translate,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
+                        if (appIconBitmap != null) {
+                            Image(
+                                bitmap = appIconBitmap,
+                                contentDescription = "Droidlate Logo",
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(8.dp))
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Translate,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
@@ -185,7 +217,7 @@ fun HomeScreen(
                         OutlinedTextField(
                             value = urlInput,
                             onValueChange = { viewModel.onUrlChanged(it) },
-                            placeholder = { Text("e.g. skydoves/Pokedex or GitHub URL") },
+                            placeholder = { Text("e.g. estiaksoyeb/TypeAssist or GitHub URL") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             trailingIcon = {
@@ -218,7 +250,7 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.padding(top = 4.dp)
                         ) {
-                            items(listOf("skydoves/Pokedex", "estiaksoyeb/Droidlate", "android/nowinandroid")) { sample ->
+                            items(listOf("estiaksoyeb/TypeAssist", "estiaksoyeb/Droidlate", "android/nowinandroid")) { sample ->
                                 SuggestionChip(
                                     onClick = { viewModel.onUrlChanged(sample) },
                                     label = { Text(sample, fontSize = 12.sp) }
