@@ -4,8 +4,8 @@ name: Publish to PyPI
 'on':
   push:
     tags:
-      - 'v*'  # Trigger when pushing version tags like v1.2.0
-      - 'cli-v*'  # Or explicit CLI tags like cli-v1.2.0
+      - 'v*'      # PyPI Python package release (e.g. v1.1.0)
+      - 'cli-v*'  # PyPI CLI package release (e.g. cli-v1.1.0)
   workflow_dispatch:
 
 jobs:

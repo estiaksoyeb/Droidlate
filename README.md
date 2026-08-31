@@ -116,9 +116,27 @@ droidlate --port 8080
 
 In addition to the Python CLI & Web interface, Droidlate includes a native Android application built with **Jetpack Compose** and embedded Python via **Chaquopy**.
 
-* **Build APK:** `./gradlew assembleDebug`
-* **Import from GitHub:** Paste any public Android repo URL to download, scan, and translate offline.
+* **Build APK:** `./gradlew assembleDebug` (or `./gradlew assembleRelease`)
+* **Import from GitHub:** Paste any public Android repo URL (e.g. `estiaksoyeb/TypeAssist`) to download, scan, and translate offline.
+* **Sync Upstream:** Pull latest upstream strings while 100% preserving existing translations and metadata.
 * **Export ZIP:** One-tap export of modified translation resources and metadata ledger via Android ShareSheet.
+
+---
+
+## 🏷️ Release Tagging Scheme
+
+To keep Android App APK releases and PyPI Python Package releases decoupled:
+
+| Target | Tag Format | GitHub Action Triggered |
+| :--- | :--- | :--- |
+| **Python CLI (PyPI Package)** | `v1.0.0` (or `cli-v1.0.0`) | Builds wheel/sdist & publishes to PyPI |
+| **Android App (APK Release)** | `app-v1.0.0` | Builds Release APK & drafts GitHub Release |
+
+---
+
+## 👨‍💻 Author
+
+Developed and maintained by **Istiak Ahmmed Soyeb** ([@estiaksoyeb](https://github.com/estiaksoyeb)).
 
 ---
 
@@ -130,4 +148,4 @@ In addition to the Python CLI & Web interface, Droidlate includes a native Andro
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 (GPL-3.0). See [LICENSE](file:///root/Projects/android-translator/LICENSE) for details.
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0). See [LICENSE](LICENSE) for details.

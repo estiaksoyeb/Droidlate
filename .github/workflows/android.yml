@@ -5,8 +5,7 @@ name: Android App CI & Release Build
   push:
     branches: [master]
     tags:
-      - 'app-v*'
-      - 'v*'
+      - 'app-v*'  # Android App release tags (e.g. app-v1.0.0)
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -84,7 +83,6 @@ jobs:
     needs: build-apk
     if: >-
       startsWith(github.ref, 'refs/tags/app-v') ||
-      startsWith(github.ref, 'refs/tags/v') ||
       (github.event_name == 'workflow_dispatch' &&
       inputs.create_release == true)
     runs-on: ubuntu-latest
