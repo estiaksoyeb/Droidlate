@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -29,11 +30,13 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -97,6 +100,7 @@ fun DashboardScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val syncSuccessMessage by viewModel.syncSuccessMessage.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val pinnedLanguages by viewModel.pinnedLanguages.collectAsState()
 
     var showAddLanguageDialog by remember { mutableStateOf(false) }
     var showSyncConfirmDialog by remember { mutableStateOf(false) }
@@ -144,12 +148,16 @@ fun DashboardScreen(
         }
     }
 
-    val filteredLanguages = remember(languages, searchQuery) {
-        if (searchQuery.isBlank()) languages
+    val filteredLanguages = remember(languages, searchQuery, pinnedLanguages) {
+        val base = if (searchQuery.isBlank()) languages
         else languages.filter {
             it.folder.contains(searchQuery, ignoreCase = true) ||
             it.locale.contains(searchQuery, ignoreCase = true)
         }
+        base.sortedWith(
+            compareByDescending<LanguageInfo> { pinnedLanguages.contains(it.folder) }
+                .thenBy { it.folder }
+        )
     }
 
     Scaffold(
@@ -397,6 +405,8 @@ fun DashboardScreen(
                     items(filteredLanguages, key = { it.folder }) { lang ->
                         LanguageCardItem(
                             language = lang,
+                            isPinned = pinnedLanguages.contains(lang.folder),
+                            onTogglePin = { viewModel.togglePinLanguage(lang.folder) },
                             onClick = { onLanguageSelected(lang.folder) }
                         )
                     }
@@ -586,11 +596,17 @@ fun SyncConfirmDialog(
 @Composable
 fun LanguageCardItem(
     language: LanguageInfo,
+    isPinned: Boolean = false,
+    onTogglePin: () -> Unit = {},
     onClick: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPinned) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+            else MaterialTheme.colorScheme.surface
+        ),
+        border = if (isPinned) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)) else null,
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
@@ -601,7 +617,10 @@ fun LanguageCardItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -621,11 +640,29 @@ fun LanguageCardItem(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
-                        Text(
-                            text = language.folder,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = language.folder,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (isPinned) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "PINNED",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
                         Text(
                             text = "${language.translated} of ${language.total} translated",
                             style = MaterialTheme.typography.labelSmall,
@@ -641,7 +678,17 @@ fun LanguageCardItem(
                         fontWeight = FontWeight.Bold,
                         color = if (language.progress == 100) StatusGreen else MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = onTogglePin,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isPinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
+                            contentDescription = if (isPinned) "Unpin language" else "Pin language",
+                            tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                     Icon(
                         imageVector = Icons.Default.ChevronRight,
                         contentDescription = null,

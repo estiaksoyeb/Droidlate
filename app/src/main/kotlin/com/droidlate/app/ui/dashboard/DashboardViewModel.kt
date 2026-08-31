@@ -47,11 +47,15 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _pinnedLanguages = MutableStateFlow<Set<String>>(emptySet())
+    val pinnedLanguages: StateFlow<Set<String>> = _pinnedLanguages.asStateFlow()
+
 
     fun loadProject(projectId: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            _pinnedLanguages.value = repository.getPinnedLanguages(projectId)
 
             val recents = repository.getRecentProjects()
             val target = recents.find { it.id == projectId }
@@ -116,6 +120,18 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
+    }
+
+    fun togglePinLanguage(folder: String) {
+        val currentProj = _project.value ?: return
+        val currentPins = _pinnedLanguages.value.toMutableSet()
+        if (currentPins.contains(folder)) {
+            currentPins.remove(folder)
+        } else {
+            currentPins.add(folder)
+        }
+        _pinnedLanguages.value = currentPins
+        repository.setPinnedLanguages(currentProj.id, currentPins)
     }
 
     fun addLanguage(localeCode: String, onComplete: () -> Unit) {

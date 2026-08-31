@@ -45,4 +45,14 @@ class ProjectRepository(private val context: Context) {
             } catch (_: Exception) {}
         }
     }
+
+    fun getPinnedLanguages(projectId: String): Set<String> {
+        val prefs = context.getSharedPreferences("droidlate_pins", Context.MODE_PRIVATE)
+        return prefs.getStringSet("pins_$projectId", emptySet()) ?: emptySet()
+    }
+
+    fun setPinnedLanguages(projectId: String, pinned: Set<String>) {
+        val prefs = context.getSharedPreferences("droidlate_pins", Context.MODE_PRIVATE)
+        prefs.edit().putStringSet("pins_$projectId", pinned).apply()
+    }
 }
