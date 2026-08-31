@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,9 +34,11 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -68,6 +71,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -102,6 +106,7 @@ fun EditorScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
 
     var activePluralBaseKey by remember { mutableStateOf<String?>(null) }
+    var showEditorHelpDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -148,6 +153,15 @@ fun EditorScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showEditorHelpDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.HelpOutline,
+                            contentDescription = "Translation & QA Guide",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -301,6 +315,10 @@ fun EditorScreen(
             }
         )
     }
+
+    if (showEditorHelpDialog) {
+        EditorHelpDialog(onDismiss = { showEditorHelpDialog = false })
+    }
 }
 
 @Composable
@@ -425,6 +443,7 @@ fun PluralEditorDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         val translatedCount = entries.count { it.status == "translated" }
+        var showPluralHelp by remember { mutableStateOf(false) }
 
         Scaffold(
             topBar = {
@@ -448,6 +467,15 @@ fun PluralEditorDialog(
                     navigationIcon = {
                         IconButton(onClick = onDismiss) {
                             Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showPluralHelp = true }) {
+                            Icon(
+                                imageVector = Icons.Default.HelpOutline,
+                                contentDescription = "Plural Rules Guide",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -530,14 +558,27 @@ fun PluralEditorDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    text = "Add missing plural forms for this language (e.g. Arabic, Russian):",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Add Language Plural Forms:",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    TextButton(
+                                        onClick = { showPluralHelp = true },
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                    ) {
+                                        Text("Rules & Info", fontSize = 11.sp)
+                                    }
+                                }
                                 LazyRow(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.padding(top = 6.dp)
+                                    modifier = Modifier.padding(top = 2.dp)
                                 ) {
                                     items(missingQuantities) { qty ->
                                         val firstRef = entries.firstOrNull()
@@ -574,6 +615,10 @@ fun PluralEditorDialog(
 
                 item { Spacer(modifier = Modifier.height(24.dp)) }
             }
+        }
+
+        if (showPluralHelp) {
+            PluralHelpDialog(onDismiss = { showPluralHelp = false })
         }
     }
 }
@@ -1112,4 +1157,108 @@ fun StringEditorCard(
             }
         }
     }
+}
+
+@Composable
+fun EditorHelpDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Translation & QA Rules") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                EditorHelpRuleRow(
+                    rule = "Placeholders",
+                    description = "Keep all format specifiers (%s, %d, %1\$s) matching the English source count."
+                )
+                EditorHelpRuleRow(
+                    rule = "Apostrophes",
+                    description = "Escape single quotes (don\\'t) or wrap the whole string in double quotes (\"don't\")."
+                )
+                EditorHelpRuleRow(
+                    rule = "HTML Tags",
+                    description = "Tags like <b>, <i>, and <font> are preserved in XML automatically."
+                )
+                EditorHelpRuleRow(
+                    rule = "Plurals",
+                    description = "Tap 'Edit Plurals' to customize quantity forms (one, other, few, many)."
+                )
+                EditorHelpRuleRow(
+                    rule = "Ignore Warning",
+                    description = "Tap 'Ignore Warning' if a format difference is intentional (reversible anytime)."
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+fun EditorHelpRuleRow(rule: String, description: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary)
+                .align(Alignment.CenterVertically)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = rule,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun PluralHelpDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Language Plural Rules (CLDR)") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Not all languages have the same number of plural forms:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                EditorHelpRuleRow(
+                    rule = "English (2 forms)",
+                    description = "Uses only 'one' (1 item) and 'other' (0, 2, 3+ items)."
+                )
+                EditorHelpRuleRow(
+                    rule = "Asian Languages (1 form)",
+                    description = "Languages like Chinese, Japanese, and Vietnamese only use 'other'."
+                )
+                EditorHelpRuleRow(
+                    rule = "Slavic & Arabic (3 to 6 forms)",
+                    description = "Russian, Polish, and Ukrainian require 3-4 forms (one, few, many, other). Arabic uses all 6."
+                )
+                EditorHelpRuleRow(
+                    rule = "Check Your Language",
+                    description = "Search online for Unicode CLDR plural rules for your language to see which exact forms are required."
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Got It")
+            }
+        }
+    )
 }

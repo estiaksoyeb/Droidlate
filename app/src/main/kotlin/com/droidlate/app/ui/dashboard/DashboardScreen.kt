@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -99,6 +101,7 @@ fun DashboardScreen(
     var showAddLanguageDialog by remember { mutableStateOf(false) }
     var showSyncConfirmDialog by remember { mutableStateOf(false) }
     var showExportOptionsDialog by remember { mutableStateOf(false) }
+    var showDashboardHelpDialog by remember { mutableStateOf(false) }
     var pendingExportResult by remember { mutableStateOf<ExportResult?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -212,6 +215,13 @@ fun DashboardScreen(
                         } else {
                             Icon(Icons.Default.FileDownload, contentDescription = "Export Translations")
                         }
+                    }
+                    IconButton(onClick = { showDashboardHelpDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.HelpOutline,
+                            contentDescription = "Dashboard Guide",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -436,6 +446,10 @@ fun DashboardScreen(
                 createDocumentLauncher.launch(pendingExportResult!!.zipFile.name)
             }
         )
+    }
+
+    if (showDashboardHelpDialog) {
+        DashboardHelpDialog(onDismiss = { showDashboardHelpDialog = false })
     }
 }
 
@@ -744,4 +758,86 @@ fun AddLanguageDialog(
             }
         }
     )
+}
+
+@Composable
+fun DashboardHelpDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Dashboard Guide") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                DashboardHelpRow(
+                    icon = Icons.Default.Add,
+                    title = "Add Language",
+                    description = "Tap '+' to add a new target locale (e.g. 'es', 'fr', 'pt-rBR')."
+                )
+                DashboardHelpRow(
+                    icon = Icons.Default.ChevronRight,
+                    title = "Translate",
+                    description = "Tap any language card to open and edit strings."
+                )
+                DashboardHelpRow(
+                    icon = Icons.Default.Sync,
+                    title = "Sync",
+                    description = "Pull latest source updates from GitHub without overwriting translations."
+                )
+                DashboardHelpRow(
+                    icon = Icons.Default.FileDownload,
+                    title = "Export",
+                    description = "Package all translated strings.xml files into a ZIP archive."
+                )
+                DashboardHelpRow(
+                    icon = Icons.Default.Folder,
+                    title = "Modules",
+                    description = "Switch resource folders using the top chips in multi-module projects."
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+fun DashboardHelpRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    description: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
