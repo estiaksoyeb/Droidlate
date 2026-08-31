@@ -164,8 +164,36 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun linkAndSyncWithGitHub(repoUrlInput: String, onInvalidUrl: ((String) -> Unit)? = null) {
+        val proj = _project.value ?: return
+        val coords = downloader.parseRepoUrl(repoUrlInput)
+        if (coords == null) {
+            val err = "Invalid GitHub repository format. Example: owner/repo, owner/repo@branch, or https://github.com/owner/repo"
+            onInvalidUrl?.invoke(err)
+            _errorMessage.value = err
+            return
+        }
+
+        val updatedProj = proj.copy(
+            owner = coords.owner,
+            repo = coords.repo,
+            branch = coords.branch,
+            name = "${coords.owner}/${coords.repo}"
+        )
+        _project.value = updatedProj
+
+        viewModelScope.launch {
+            repository.saveProject(updatedProj)
+            syncWithGitHub()
+        }
+    }
+
     fun syncWithGitHub() {
         val proj = _project.value ?: return
+        if (proj.isLocal) {
+            _errorMessage.value = "Please link an upstream GitHub repository before syncing."
+            return
+        }
         val job = viewModelScope.launch {
             _isSyncing.value = true
             _errorMessage.value = null

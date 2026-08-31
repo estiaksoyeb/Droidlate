@@ -74,8 +74,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _ingestionState.value = state
                 if (state is IngestionState.Success) {
                     repository.saveProject(state.project)
-                    engineManager.startEngine(state.project.activeResDirPath)
                     notificationHelper.showImportSuccess(state.project.name)
+                    _ingestionState.value = IngestionState.Idle
                     refreshRecents()
                     onSuccess(state.project)
                 }
@@ -86,31 +86,56 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun importLocalZip(uri: Uri, onSuccess: (ProjectInfo) -> Unit) {
         viewModelScope.launch {
             _ingestionState.value = IngestionState.Extracting("Importing local ZIP archive...")
-            val contentResolver = getApplication<Application>().contentResolver
-            val inputStream = contentResolver.openInputStream(uri)
-            if (inputStream != null) {
-                val projectName = uri.lastPathSegment ?: "ImportedProject"
-                val project = downloader.importLocalZip(inputStream, projectName)
-                if (project != null) {
-                    repository.saveProject(project)
-                    engineManager.startEngine(project.activeResDirPath)
-                    notificationHelper.showImportSuccess(project.name)
-                    _ingestionState.value = IngestionState.Success(project)
-                    refreshRecents()
-                    onSuccess(project)
+            try {
+                val context = getApplication<Application>()
+                val contentResolver = context.contentResolver
+                val inputStream = contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                    val projectName = getDisplayNameFromUri(context, uri)
+                    val project = downloader.importLocalZip(inputStream, projectName)
+                    if (project != null) {
+                        repository.saveProject(project)
+                        notificationHelper.showImportSuccess(project.name)
+                        _ingestionState.value = IngestionState.Idle
+                        refreshRecents()
+                        onSuccess(project)
+                    } else {
+                        _ingestionState.value = IngestionState.Error("Failed to import: No valid Android 'res/values/strings.xml' found in ZIP.")
+                    }
                 } else {
-                    _ingestionState.value = IngestionState.Error("Failed to import or no Android strings.xml found in ZIP.")
+                    _ingestionState.value = IngestionState.Error("Could not open selected file.")
                 }
-            } else {
-                _ingestionState.value = IngestionState.Error("Could not open selected file.")
+            } catch (e: Exception) {
+                _ingestionState.value = IngestionState.Error("Import failed: ${e.message ?: "Unknown error"}")
             }
         }
+    }
+
+    private fun getDisplayNameFromUri(context: android.content.Context, uri: Uri): String {
+        var name = "ImportedProject"
+        if (uri.scheme == "content") {
+            try {
+                context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (index != -1) {
+                            val displayName = cursor.getString(index)
+                            if (!displayName.isNullOrBlank()) {
+                                name = displayName
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        } else if (uri.scheme == "file") {
+            uri.lastPathSegment?.let { name = it }
+        }
+        return name
     }
 
     fun openExistingProject(project: ProjectInfo, onReady: (ProjectInfo) -> Unit) {
         viewModelScope.launch {
             repository.saveProject(project)
-            engineManager.startEngine(project.activeResDirPath)
             onReady(project)
         }
     }

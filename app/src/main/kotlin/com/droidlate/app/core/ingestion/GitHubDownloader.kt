@@ -161,11 +161,12 @@ class GitHubDownloader(private val context: Context) {
      */
     suspend fun importLocalZip(inputStream: InputStream, projectName: String): ProjectInfo? = withContext(Dispatchers.IO) {
         val sanitizedName = projectName.replace("[^a-zA-Z0-9_.-]".toRegex(), "_").removeSuffix(".zip")
+        val uniqueId = "local_${sanitizedName}_${System.currentTimeMillis()}"
         val projectsDir = File(context.filesDir, "projects").apply { mkdirs() }
-        val targetDir = File(projectsDir, "local_${sanitizedName}_${System.currentTimeMillis()}")
+        val targetDir = File(projectsDir, uniqueId)
         targetDir.mkdirs()
 
-        val tempZip = File(context.cacheDir, "temp_local_import.zip")
+        val tempZip = File(context.cacheDir, "${uniqueId}_import.zip")
         try {
             FileOutputStream(tempZip).use { out ->
                 inputStream.copyTo(out)
@@ -216,7 +217,13 @@ class GitHubDownloader(private val context: Context) {
 
             while (zis.nextEntry.also { entry = it } != null) {
                 val currentEntry = entry ?: break
-                val newFile = File(destDir, currentEntry.name)
+                val normalizedName = currentEntry.name.replace('\\', '/').removePrefix("/")
+                if (normalizedName.isEmpty()) {
+                    zis.closeEntry()
+                    continue
+                }
+
+                val newFile = File(destDir, normalizedName)
                 val canonicalDestPath = newFile.canonicalPath
 
                 // ZipSlip vulnerability protection
@@ -245,12 +252,34 @@ class GitHubDownloader(private val context: Context) {
 
         // Recursively find all `values/strings.xml`
         rootDir.walkTopDown().forEach { file ->
-            if (file.isFile && file.name == "strings.xml") {
+            if (file.isFile && file.name.equals("strings.xml", ignoreCase = true)) {
                 val parent = file.parentFile // values/
-                if (parent != null && parent.name == "values") {
+                if (parent != null && parent.name.equals("values", ignoreCase = true)) {
                     val resDir = parent.parentFile // res/
                     if (resDir != null && !foundResDirs.contains(resDir)) {
                         foundResDirs.add(resDir)
+                    }
+                }
+            }
+        }
+
+        // Fallback: Check if strings.xml is in a non-standard or top-level directory
+        if (foundResDirs.isEmpty()) {
+            val allStringsFiles = rootDir.walkTopDown().filter { it.isFile && it.name.equals("strings.xml", ignoreCase = true) }.toList()
+            if (allStringsFiles.isNotEmpty()) {
+                val candidate = allStringsFiles.first()
+                val parent = candidate.parentFile
+                if (parent != null) {
+                    if (parent.name.equals("values", ignoreCase = true)) {
+                        parent.parentFile?.let { foundResDirs.add(it) }
+                    } else {
+                        val syntheticValues = File(parent, "values")
+                        syntheticValues.mkdirs()
+                        val localTarget = File(syntheticValues, "strings.xml")
+                        if (!localTarget.exists()) {
+                            candidate.copyTo(localTarget, overwrite = true)
+                        }
+                        foundResDirs.add(parent)
                     }
                 }
             }
@@ -278,8 +307,8 @@ class GitHubDownloader(private val context: Context) {
         val sourceXml = File(prioritizedResDir, "values/strings.xml")
 
         return ProjectInfo(
-            id = coordinates.id,
-            name = "${coordinates.owner}/${coordinates.repo}",
+            id = rootDir.name,
+            name = if (coordinates.owner.equals("Local", ignoreCase = true)) coordinates.repo else "${coordinates.owner}/${coordinates.repo}",
             owner = coordinates.owner,
             repo = coordinates.repo,
             branch = coordinates.branch,
@@ -296,6 +325,10 @@ class GitHubDownloader(private val context: Context) {
      * resources without touching existing translated values-* files or metadata sidecars.
      */
     suspend fun syncRepository(project: ProjectInfo): Result<com.droidlate.app.core.model.SyncSummary> = withContext(Dispatchers.IO) {
+        if (project.isLocal) {
+            return@withContext Result.failure(IllegalStateException("Cannot sync a local project without a linked GitHub repository URL."))
+        }
+
         val coordinates = RepoCoordinates(owner = project.owner, repo = project.repo, branch = project.branch)
         val stagingDir = File(context.cacheDir, "staging_${project.id}_${System.currentTimeMillis()}")
         val tempZip = File(context.cacheDir, "staging_${project.id}.zip")
@@ -352,12 +385,7 @@ class GitHubDownloader(private val context: Context) {
                 val upstreamBaseValues = File(upstreamResDir, "values")
                 if (!upstreamBaseValues.exists()) continue
 
-                val relPath = upstreamResDir.relativeToOrNull(upstreamProject.rootDir)?.path
-                val matchingLocalResDir = if (relPath != null) {
-                    File(project.rootDir, relPath).takeIf { it.exists() } ?: project.activeResDir
-                } else {
-                    project.activeResDir
-                }
+                val matchingLocalResDir = findMatchingLocalResDir(project, upstreamResDir, upstreamProject.rootDir)
 
                 val localBaseValues = File(matchingLocalResDir, "values")
                 localBaseValues.mkdirs()
@@ -386,6 +414,29 @@ class GitHubDownloader(private val context: Context) {
             stagingDir.deleteRecursively()
             Result.failure(e)
         }
+    }
+
+    private fun findMatchingLocalResDir(project: ProjectInfo, upstreamResDir: File, upstreamRootDir: File): File {
+        val relPath = upstreamResDir.relativeToOrNull(upstreamRootDir)?.path?.replace("\\", "/")
+        if (relPath != null) {
+            val directLocal = File(project.rootDir, relPath)
+            if (directLocal.exists()) return directLocal
+
+            // Strip the top-level archive directory (e.g. repo-commitSha/app/src/main/res)
+            val segments = relPath.split("/").filter { it.isNotEmpty() }
+            if (segments.size > 1) {
+                val strippedRelPath = segments.drop(1).joinToString("/")
+                val strippedLocal = File(project.rootDir, strippedRelPath)
+                if (strippedLocal.exists()) return strippedLocal
+
+                val matched = project.availableResDirPaths.find { localPath ->
+                    val normLocal = localPath.replace("\\", "/")
+                    normLocal.endsWith(strippedRelPath) || (segments.size >= 3 && normLocal.endsWith(segments.takeLast(3).joinToString("/")))
+                }
+                if (matched != null) return File(matched)
+            }
+        }
+        return project.activeResDir
     }
 }
 

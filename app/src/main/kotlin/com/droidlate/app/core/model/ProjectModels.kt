@@ -20,6 +20,17 @@ data class ProjectInfo(
     val rootDir: File get() = File(rootDirPath)
     val activeResDir: File get() = File(activeResDirPath)
     val sourceXmlFile: File get() = File(sourceXmlPath)
+
+    val isLocal: Boolean
+        get() = owner.equals("Local", ignoreCase = true) || owner.isBlank() || repo.isBlank()
+
+    val hasRemoteRepo: Boolean
+        get() = !isLocal
+
+    val remoteCoordinatesFormatted: String
+        get() = if (hasRemoteRepo) {
+            if (!branch.isNullOrBlank()) "$owner/$repo@$branch" else "$owner/$repo"
+        } else ""
 }
 
 /**

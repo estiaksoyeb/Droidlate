@@ -1,7 +1,11 @@
 package com.droidlate.app.ui.dashboard
 
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.HelpOutline
@@ -78,6 +83,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.droidlate.app.core.model.ExportResult
 import com.droidlate.app.core.model.LanguageInfo
+import com.droidlate.app.core.model.ProjectInfo
 import com.droidlate.app.ui.theme.StatusGreen
 import com.droidlate.app.ui.theme.StatusRed
 import com.droidlate.app.ui.theme.StatusYellow
@@ -104,6 +110,7 @@ fun DashboardScreen(
 
     var showAddLanguageDialog by remember { mutableStateOf(false) }
     var showSyncConfirmDialog by remember { mutableStateOf(false) }
+    var showLinkAndSyncDialog by remember { mutableStateOf(false) }
     var showExportOptionsDialog by remember { mutableStateOf(false) }
     var showDashboardHelpDialog by remember { mutableStateOf(false) }
     var pendingExportResult by remember { mutableStateOf<ExportResult?>(null) }
@@ -197,7 +204,13 @@ fun DashboardScreen(
                 actions = {
                     // Sync with GitHub action
                     IconButton(
-                        onClick = { showSyncConfirmDialog = true },
+                        onClick = {
+                            if (project?.isLocal == true) {
+                                showLinkAndSyncDialog = true
+                            } else {
+                                showSyncConfirmDialog = true
+                            }
+                        },
                         enabled = !isSyncing && !isLoading
                     ) {
                         if (isSyncing) {
@@ -430,13 +443,29 @@ fun DashboardScreen(
         )
     }
 
-    if (showSyncConfirmDialog) {
+    if (showSyncConfirmDialog && project != null) {
         SyncConfirmDialog(
-            projectName = project?.name ?: "Repository",
+            project = project!!,
             onDismiss = { showSyncConfirmDialog = false },
             onConfirm = {
                 showSyncConfirmDialog = false
                 viewModel.syncWithGitHub()
+            },
+            onChangeRepo = {
+                showSyncConfirmDialog = false
+                showLinkAndSyncDialog = true
+            }
+        )
+    }
+
+    if (showLinkAndSyncDialog && project != null) {
+        LinkAndSyncDialog(
+            initialUrl = project!!.remoteCoordinatesFormatted,
+            isLocalProject = project!!.isLocal,
+            onDismiss = { showLinkAndSyncDialog = false },
+            onConfirm = { urlInput ->
+                showLinkAndSyncDialog = false
+                viewModel.linkAndSyncWithGitHub(urlInput)
             }
         )
     }
@@ -557,17 +586,19 @@ fun ExportOptionsDialog(
 
 @Composable
 fun SyncConfirmDialog(
-    projectName: String,
+    project: ProjectInfo,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
+    onChangeRepo: () -> Unit
 ) {
+    val repoLabel = if (!project.branch.isNullOrBlank()) "${project.owner}/${project.repo}@${project.branch}" else "${project.owner}/${project.repo}"
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Sync with Upstream GitHub") },
         text = {
             Column {
                 Text(
-                    text = "Pull latest commits from '$projectName'?",
+                    text = "Pull latest commits from '$repoLabel'?",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -577,11 +608,92 @@ fun SyncConfirmDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.height(10.dp))
+                TextButton(
+                    onClick = onChangeRepo,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Change Repository / Branch", style = MaterialTheme.typography.labelMedium)
+                }
             }
         },
         confirmButton = {
             Button(onClick = onConfirm) {
                 Text("Sync Now")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun LinkAndSyncDialog(
+    initialUrl: String = "",
+    isLocalProject: Boolean = true,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    val context = LocalContext.current
+    var urlInput by remember { mutableStateOf(initialUrl) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(if (isLocalProject) "Link Upstream Repository" else "Change Upstream Repository")
+        },
+        text = {
+            Column {
+                Text(
+                    text = if (isLocalProject) {
+                        "This project was imported from a local ZIP file without a repository URL. Enter a GitHub repository to sync base English strings."
+                    } else {
+                        "Enter the GitHub repository URL or shorthand to sync this project with."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                OutlinedTextField(
+                    value = urlInput,
+                    onValueChange = { urlInput = it.trim() },
+                    placeholder = { Text("e.g. estiaksoyeb/TypeAssist") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                if (clipboard?.hasPrimaryClip() == true && clipboard.primaryClipDescription?.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) == true) {
+                                    val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                    urlInput = text.trim()
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentPaste,
+                                contentDescription = "Paste from clipboard"
+                            )
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Formats: 'owner/repo', 'owner/repo@branch', or full GitHub URL.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { if (urlInput.isNotBlank()) onConfirm(urlInput) },
+                enabled = urlInput.isNotBlank()
+            ) {
+                Text(if (isLocalProject) "Link & Sync" else "Update & Sync")
             }
         },
         dismissButton = {

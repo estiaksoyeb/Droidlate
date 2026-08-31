@@ -60,11 +60,14 @@ fun AppNavHost(
                 navArgument("langFolder") { type = NavType.StringType }
             )
         ) { backStackEntry ->
+            val encodedId = backStackEntry.arguments?.getString("projectId") ?: ""
+            val projectId = Screen.decodeParam(encodedId)
             val encodedLang = backStackEntry.arguments?.getString("langFolder") ?: ""
             val langFolder = Screen.decodeParam(encodedLang)
             val editorViewModel: EditorViewModel = viewModel()
 
             EditorScreen(
+                projectId = projectId,
                 langFolder = langFolder,
                 viewModel = editorViewModel,
                 onNavigateBack = { navController.popBackStack() }

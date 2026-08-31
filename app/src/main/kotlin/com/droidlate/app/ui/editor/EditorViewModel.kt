@@ -3,6 +3,7 @@ package com.droidlate.app.ui.editor
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.droidlate.app.core.ingestion.ProjectRepository
 import com.droidlate.app.core.model.StringEntry
 import com.droidlate.app.core.model.SuggestionItem
 import com.droidlate.app.core.python.PythonEngineManager
@@ -46,6 +47,7 @@ sealed class EditorItem {
 class EditorViewModel(application: Application) : AndroidViewModel(application) {
 
     private val engineManager = PythonEngineManager.getInstance(application)
+    private val repository = ProjectRepository(application)
 
     private val _langFolder = MutableStateFlow("")
     val langFolder: StateFlow<String> = _langFolder.asStateFlow()
@@ -71,11 +73,19 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    fun loadStrings(folder: String) {
+    fun loadStrings(projectId: String = "", folder: String) {
         _langFolder.value = folder
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+
+            if (projectId.isNotBlank()) {
+                val recents = repository.getRecentProjects()
+                val target = recents.find { proj -> proj.id == projectId }
+                if (target != null) {
+                    engineManager.prepareWorkspace(target.activeResDirPath)
+                }
+            }
 
             val result = engineManager.apiClient.fetchStrings(folder)
             result.onSuccess { list ->

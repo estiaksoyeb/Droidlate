@@ -128,7 +128,7 @@ fun HomeScreen(
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
             viewModel.importLocalZip(uri) { project ->
@@ -299,7 +299,21 @@ fun HomeScreen(
                             }
 
                             OutlinedButton(
-                                onClick = { filePickerLauncher.launch("application/zip") },
+                                onClick = {
+                                    try {
+                                        filePickerLauncher.launch(
+                                            arrayOf(
+                                                "application/zip",
+                                                "application/x-zip-compressed",
+                                                "application/x-zip",
+                                                "application/octet-stream",
+                                                "*/*"
+                                            )
+                                        )
+                                    } catch (_: Exception) {
+                                        filePickerLauncher.launch(arrayOf("*/*"))
+                                    }
+                                },
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(18.dp))

@@ -94,6 +94,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
+    projectId: String = "",
     langFolder: String,
     viewModel: EditorViewModel,
     onNavigateBack: () -> Unit
@@ -111,8 +112,8 @@ fun EditorScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(langFolder) {
-        viewModel.loadStrings(langFolder)
+    LaunchedEffect(projectId, langFolder) {
+        viewModel.loadStrings(projectId, langFolder)
     }
 
     LaunchedEffect(errorMessage) {

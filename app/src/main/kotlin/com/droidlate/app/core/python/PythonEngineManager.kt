@@ -61,12 +61,6 @@ class PythonEngineManager private constructor(private val context: Context) {
             environ?.callAttr("__setitem__", "HOME", appCacheDir)
 
             val serverModule = py.getModule("droidlate.web.server")
-            if (initialResDir != null) {
-                serverModule.put("RES_DIR", initialResDir)
-                serverModule.put("SOURCE_XML", null)
-                serverModule.put("TARGET_XML", null)
-                serverModule.put("IS_SINGLE_FILE_MODE", false)
-            }
 
             // 2. Start Flask server on background daemon thread if not already running
             if (!isServerThreadRunning) {
@@ -84,6 +78,14 @@ class PythonEngineManager private constructor(private val context: Context) {
                 serverThread.start()
             }
 
+            // If already running and ready, update workspace and return immediately
+            if (_engineState.value == EngineState.Ready) {
+                if (initialResDir != null) {
+                    setWorkspace(initialResDir)
+                }
+                return@withContext true
+            }
+
             // 3. Wait for localhost server to become responsive
             var attempts = 0
             val maxAttempts = 30 // ~6 seconds total
@@ -99,10 +101,10 @@ class PythonEngineManager private constructor(private val context: Context) {
             }
 
             if (serverUp) {
+                _engineState.value = EngineState.Ready
                 if (initialResDir != null) {
                     setWorkspace(initialResDir)
                 }
-                _engineState.value = EngineState.Ready
                 Log.i(TAG, "Embedded Python Flask server is online and ready.")
                 true
             } else {
