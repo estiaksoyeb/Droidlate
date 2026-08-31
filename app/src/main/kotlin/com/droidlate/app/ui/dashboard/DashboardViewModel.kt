@@ -166,27 +166,38 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun syncWithGitHub() {
         val proj = _project.value ?: return
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             _isSyncing.value = true
             _errorMessage.value = null
             _syncSuccessMessage.value = null
             notificationHelper.showSyncOngoing(proj.name, "Syncing upstream commits from GitHub...")
 
-            val result = downloader.syncRepository(proj)
-            result.onSuccess { summary ->
-                // Refresh workspace and recalculate language diffs
-                val ready = engineManager.prepareWorkspace(proj.activeResDirPath)
-                if (ready) {
-                    loadLanguagesInternal()
+            try {
+                val result = downloader.syncRepository(proj)
+                result.onSuccess { summary ->
+                    // Refresh workspace and recalculate language diffs
+                    val ready = engineManager.prepareWorkspace(proj.activeResDirPath)
+                    if (ready) {
+                        loadLanguagesInternal()
+                    }
+                    _syncSuccessMessage.value = summary.message
+                    notificationHelper.showSyncSuccess(proj.name, summary.message)
+                }.onFailure { ex ->
+                    val error = ex.message ?: "Failed to sync repository"
+                    _errorMessage.value = "Sync failed: $error"
+                    notificationHelper.showSyncFailed(proj.name, error)
                 }
-                _syncSuccessMessage.value = summary.message
-                notificationHelper.showSyncSuccess(proj.name, summary.message)
-            }.onFailure { ex ->
-                val error = ex.message ?: "Failed to sync repository"
-                _errorMessage.value = "Sync failed: $error"
-                notificationHelper.showSyncFailed(proj.name, error)
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                _errorMessage.value = "Sync was cancelled."
+            } finally {
+                _isSyncing.value = false
+                com.droidlate.app.core.notification.SyncController.clear()
             }
+        }
+
+        com.droidlate.app.core.notification.SyncController.registerSync(job) {
             _isSyncing.value = false
+            _errorMessage.value = "Sync was stopped by user."
         }
     }
 

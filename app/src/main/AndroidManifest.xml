@@ -33,5 +33,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".core.notification.SyncCancelReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.droidlate.app.ACTION_CANCEL_SYNC" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
