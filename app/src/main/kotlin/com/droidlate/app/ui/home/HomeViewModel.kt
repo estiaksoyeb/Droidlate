@@ -31,12 +31,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _recentProjects = MutableStateFlow<List<ProjectInfo>>(emptyList())
     val recentProjects: StateFlow<List<ProjectInfo>> = _recentProjects.asStateFlow()
 
+    private val _userProfile = MutableStateFlow(repository.getUserProfile())
+    val userProfile: StateFlow<com.droidlate.app.core.model.UserProfile> = _userProfile.asStateFlow()
+
     init {
         refreshRecents()
+        refreshProfile()
         viewModelScope.launch {
             // Warm up Python engine in background
             engineManager.startEngine()
         }
+    }
+
+    fun refreshProfile() {
+        _userProfile.value = repository.getUserProfile()
+    }
+
+    fun saveUserProfile(profile: com.droidlate.app.core.model.UserProfile) {
+        repository.saveUserProfile(profile)
+        _userProfile.value = profile
     }
 
     fun onUrlChanged(newUrl: String) {

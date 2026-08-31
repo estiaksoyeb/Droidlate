@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -92,21 +94,38 @@ class NotificationHelper(private val context: Context) {
         )
     }
 
+    private fun getAppIconBitmap(): Bitmap? {
+        return try {
+            val drawable = ContextCompat.getDrawable(context, R.mipmap.ic_launcher)
+                ?: context.packageManager.getApplicationIcon(context.packageName)
+            val w = drawable.intrinsicWidth.coerceAtLeast(108)
+            val h = drawable.intrinsicHeight.coerceAtLeast(108)
+            val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, w, h)
+            drawable.draw(canvas)
+            bitmap
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     fun showSyncOngoing(projectName: String, detail: String = "Syncing with GitHub upstream...") {
         if (!hasPermission()) return
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_SYNC)
-            .setSmallIcon(R.mipmap.ic_launcher)
+        val builder = NotificationCompat.Builder(context, CHANNEL_SYNC)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Syncing $projectName")
             .setContentText(detail)
             .setOngoing(true)
             .setProgress(0, 0, true)
             .setContentIntent(getAppLaunchPendingIntent())
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+
+        getAppIconBitmap()?.let { builder.setLargeIcon(it) }
 
         try {
-            NotificationManagerCompat.from(context).notify(ID_SYNC_ONGOING, notification)
+            NotificationManagerCompat.from(context).notify(ID_SYNC_ONGOING, builder.build())
         } catch (_: SecurityException) {
             // Permission not granted
         }
@@ -116,18 +135,19 @@ class NotificationHelper(private val context: Context) {
         cancel(ID_SYNC_ONGOING)
         if (!hasPermission()) return
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_SYNC)
-            .setSmallIcon(R.mipmap.ic_launcher)
+        val builder = NotificationCompat.Builder(context, CHANNEL_SYNC)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Sync Complete · $projectName")
             .setContentText(summary)
             .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
             .setAutoCancel(true)
             .setContentIntent(getAppLaunchPendingIntent())
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
+
+        getAppIconBitmap()?.let { builder.setLargeIcon(it) }
 
         try {
-            NotificationManagerCompat.from(context).notify(ID_SYNC_RESULT, notification)
+            NotificationManagerCompat.from(context).notify(ID_SYNC_RESULT, builder.build())
         } catch (_: SecurityException) {
             // Permission not granted
         }
@@ -137,18 +157,19 @@ class NotificationHelper(private val context: Context) {
         cancel(ID_SYNC_ONGOING)
         if (!hasPermission()) return
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_SYNC)
-            .setSmallIcon(R.mipmap.ic_launcher)
+        val builder = NotificationCompat.Builder(context, CHANNEL_SYNC)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Sync Failed · $projectName")
             .setContentText(errorMessage)
             .setStyle(NotificationCompat.BigTextStyle().bigText(errorMessage))
             .setAutoCancel(true)
             .setContentIntent(getAppLaunchPendingIntent())
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build()
+
+        getAppIconBitmap()?.let { builder.setLargeIcon(it) }
 
         try {
-            NotificationManagerCompat.from(context).notify(ID_SYNC_RESULT, notification)
+            NotificationManagerCompat.from(context).notify(ID_SYNC_RESULT, builder.build())
         } catch (_: SecurityException) {
             // Permission not granted
         }
@@ -157,18 +178,19 @@ class NotificationHelper(private val context: Context) {
     fun showExportSuccess(projectName: String, fileName: String, pendingIntent: PendingIntent? = null) {
         if (!hasPermission()) return
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_EXPORTS)
-            .setSmallIcon(R.mipmap.ic_launcher)
+        val builder = NotificationCompat.Builder(context, CHANNEL_EXPORTS)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Translations Exported")
             .setContentText("$projectName: $fileName")
             .setStyle(NotificationCompat.BigTextStyle().bigText("Exported $fileName for $projectName"))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent ?: getAppLaunchPendingIntent())
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
+
+        getAppIconBitmap()?.let { builder.setLargeIcon(it) }
 
         try {
-            NotificationManagerCompat.from(context).notify(ID_EXPORT_RESULT, notification)
+            NotificationManagerCompat.from(context).notify(ID_EXPORT_RESULT, builder.build())
         } catch (_: SecurityException) {
             // Permission not granted
         }
@@ -177,17 +199,18 @@ class NotificationHelper(private val context: Context) {
     fun showImportSuccess(projectName: String) {
         if (!hasPermission()) return
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_SYNC)
-            .setSmallIcon(R.mipmap.ic_launcher)
+        val builder = NotificationCompat.Builder(context, CHANNEL_SYNC)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Project Imported")
             .setContentText("$projectName is ready for translation.")
             .setAutoCancel(true)
             .setContentIntent(getAppLaunchPendingIntent())
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
+
+        getAppIconBitmap()?.let { builder.setLargeIcon(it) }
 
         try {
-            NotificationManagerCompat.from(context).notify(ID_IMPORT_RESULT, notification)
+            NotificationManagerCompat.from(context).notify(ID_IMPORT_RESULT, builder.build())
         } catch (_: SecurityException) {
             // Permission not granted
         }

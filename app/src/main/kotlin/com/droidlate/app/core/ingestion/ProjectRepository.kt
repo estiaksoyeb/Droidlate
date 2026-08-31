@@ -55,4 +55,20 @@ class ProjectRepository(private val context: Context) {
         val prefs = context.getSharedPreferences("droidlate_pins", Context.MODE_PRIVATE)
         prefs.edit().putStringSet("pins_$projectId", pinned).apply()
     }
+
+    fun getUserProfile(): com.droidlate.app.core.model.UserProfile {
+        val prefs = context.getSharedPreferences("droidlate_user_profile", Context.MODE_PRIVATE)
+        return com.droidlate.app.core.model.UserProfile(
+            githubUsername = prefs.getString("github_username", "") ?: "",
+            email = prefs.getString("email", "") ?: ""
+        )
+    }
+
+    fun saveUserProfile(profile: com.droidlate.app.core.model.UserProfile) {
+        val prefs = context.getSharedPreferences("droidlate_user_profile", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("github_username", profile.githubUsername.trim())
+            .putString("email", profile.email.trim())
+            .apply()
+    }
 }

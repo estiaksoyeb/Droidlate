@@ -27,12 +27,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
@@ -87,6 +90,7 @@ import androidx.core.content.ContextCompat
 import com.droidlate.app.R
 import com.droidlate.app.core.model.IngestionState
 import com.droidlate.app.core.model.ProjectInfo
+import com.droidlate.app.core.model.UserProfile
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -101,9 +105,11 @@ fun HomeScreen(
     val urlInput by viewModel.repoUrlInput.collectAsState()
     val ingestionState by viewModel.ingestionState.collectAsState()
     val recentProjects by viewModel.recentProjects.collectAsState()
+    val userProfile by viewModel.userProfile.collectAsState()
 
     var showHelpDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showProfileDialog by remember { mutableStateOf(false) }
 
     val appIconBitmap: ImageBitmap? = remember(context) {
         try {
@@ -168,7 +174,7 @@ fun HomeScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Mobile Localization Workspace",
+                                text = "String Localization Tool",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -176,6 +182,13 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showProfileDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "Translator Profile",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     IconButton(onClick = { showHelpDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.HelpOutline,
@@ -231,7 +244,7 @@ fun HomeScreen(
                         OutlinedTextField(
                             value = urlInput,
                             onValueChange = { viewModel.onUrlChanged(it) },
-                            placeholder = { Text("e.g. estiaksoyeb/TypeAssist or GitHub URL") },
+                            placeholder = { Text("e.g. estiaksoyeb/TypeAssist") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             trailingIcon = {
@@ -449,6 +462,17 @@ fun HomeScreen(
 
     if (showAboutDialog) {
         AboutDialog(onDismiss = { showAboutDialog = false })
+    }
+
+    if (showProfileDialog) {
+        TranslatorProfileDialog(
+            initialProfile = userProfile,
+            onSave = { updated ->
+                viewModel.saveUserProfile(updated)
+                showProfileDialog = false
+            },
+            onDismiss = { showProfileDialog = false }
+        )
     }
 }
 
@@ -803,6 +827,126 @@ fun AboutDialog(onDismiss: () -> Unit) {
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+fun TranslatorProfileDialog(
+    initialProfile: UserProfile,
+    onSave: (UserProfile) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var githubUsername by remember { mutableStateOf(initialProfile.githubUsername) }
+    var email by remember { mutableStateOf(initialProfile.email) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.AccountCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Translator Profile",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Set your GitHub username and email. When you export translations, this info is included in the package so project maintainers can credit you for your contributions. (Optional)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = githubUsername,
+                    onValueChange = { githubUsername = it },
+                    label = { Text("GitHub Username") },
+                    placeholder = { Text("e.g. estiaksoyeb") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.AlternateEmail,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email Address") },
+                    placeholder = { Text("e.g. author@example.com") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Email,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+        },
+        dismissButton = {
+            Row {
+                if (initialProfile.githubUsername.isNotBlank() || initialProfile.email.isNotBlank()) {
+                    TextButton(
+                        onClick = {
+                            onSave(UserProfile("", ""))
+                        }
+                    ) {
+                        Text("Clear", color = MaterialTheme.colorScheme.error)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSave(UserProfile(githubUsername.trim(), email.trim()))
+                }
+            ) {
+                Text("Save Profile")
             }
         }
     )

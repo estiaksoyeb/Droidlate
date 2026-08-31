@@ -101,3 +101,11 @@ data class SyncSummary(
     val message: String
 )
 
+/**
+ * User profile for crediting translation contributions in exports.
+ */
+data class UserProfile(
+    val githubUsername: String = "",
+    val email: String = ""
+)
+

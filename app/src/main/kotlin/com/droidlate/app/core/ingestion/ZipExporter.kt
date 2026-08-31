@@ -92,6 +92,39 @@ class ZipExporter(private val context: Context) {
                     }
                 }
             }
+
+            // 3. Inject Translator Profile credit metadata if configured
+            val userProfile = ProjectRepository(context).getUserProfile()
+            if (userProfile.githubUsername.isNotBlank() || userProfile.email.isNotBlank()) {
+                val exportedAt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+                val translatorJson = """
+                    {
+                      "translator": {
+                        "github_username": "${userProfile.githubUsername.replace("\"", "\\\"")}",
+                        "email": "${userProfile.email.replace("\"", "\\\"")}"
+                      },
+                      "project": "${project.name.replace("\"", "\\\"")}",
+                      "exported_at": "$exportedAt",
+                      "generator": "Droidlate Mobile Workspace"
+                    }
+                """.trimIndent()
+                addStringToZip(zos, translatorJson, "TRANSLATOR.json")
+                fileCount++
+
+                val translatorTxt = """
+                    Translated & Exported with Droidlate
+                    ====================================
+                    Project: ${project.name}
+                    Exported At: $exportedAt
+
+                    Contributor Credits:
+                    --------------------
+                    GitHub: ${userProfile.githubUsername.ifBlank { "(Not provided)" }}
+                    Email:  ${userProfile.email.ifBlank { "(Not provided)" }}
+                """.trimIndent()
+                addStringToZip(zos, translatorTxt, "TRANSLATOR.txt")
+                fileCount++
+            }
         }
 
         ExportResult(
@@ -126,6 +159,16 @@ class ZipExporter(private val context: Context) {
         FileInputStream(file).use { fis ->
             fis.copyTo(zos)
         }
+        zos.closeEntry()
+    }
+
+    private fun addStringToZip(zos: ZipOutputStream, content: String, entryPath: String) {
+        val bytes = content.toByteArray(Charsets.UTF_8)
+        val entry = ZipEntry(entryPath)
+        entry.time = System.currentTimeMillis()
+        entry.size = bytes.size.toLong()
+        zos.putNextEntry(entry)
+        zos.write(bytes)
         zos.closeEntry()
     }
 
