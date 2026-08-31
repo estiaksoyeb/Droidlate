@@ -21,6 +21,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val exporter = ZipExporter(application)
     private val downloader = com.droidlate.app.core.ingestion.GitHubDownloader(application)
     private val engineManager = PythonEngineManager.getInstance(application)
+    private val notificationHelper = com.droidlate.app.core.notification.NotificationHelper.getInstance(application)
 
     private val _project = MutableStateFlow<ProjectInfo?>(null)
     val project: StateFlow<ProjectInfo?> = _project.asStateFlow()
@@ -137,6 +138,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             _isExporting.value = true
             try {
                 val result = exporter.exportTranslations(proj)
+                notificationHelper.showExportSuccess(proj.name, result.zipFile.name)
                 onExportComplete(result)
             } catch (e: Exception) {
                 _errorMessage.value = "Export failed: ${e.message}"
@@ -152,6 +154,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             _isSyncing.value = true
             _errorMessage.value = null
             _syncSuccessMessage.value = null
+            notificationHelper.showSyncOngoing(proj.name, "Syncing upstream commits from GitHub...")
 
             val result = downloader.syncRepository(proj)
             result.onSuccess { summary ->
@@ -161,8 +164,11 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                     loadLanguagesInternal()
                 }
                 _syncSuccessMessage.value = summary.message
+                notificationHelper.showSyncSuccess(proj.name, summary.message)
             }.onFailure { ex ->
-                _errorMessage.value = "Sync failed: ${ex.message}"
+                val error = ex.message ?: "Failed to sync repository"
+                _errorMessage.value = "Sync failed: $error"
+                notificationHelper.showSyncFailed(proj.name, error)
             }
             _isSyncing.value = false
         }

@@ -20,6 +20,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val downloader = GitHubDownloader(application)
     private val repository = ProjectRepository(application)
     private val engineManager = PythonEngineManager.getInstance(application)
+    private val notificationHelper = com.droidlate.app.core.notification.NotificationHelper.getInstance(application)
 
     private val _repoUrlInput = MutableStateFlow("")
     val repoUrlInput: StateFlow<String> = _repoUrlInput.asStateFlow()
@@ -61,6 +62,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 if (state is IngestionState.Success) {
                     repository.saveProject(state.project)
                     engineManager.startEngine(state.project.activeResDirPath)
+                    notificationHelper.showImportSuccess(state.project.name)
                     refreshRecents()
                     onSuccess(state.project)
                 }
@@ -79,6 +81,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 if (project != null) {
                     repository.saveProject(project)
                     engineManager.startEngine(project.activeResDirPath)
+                    notificationHelper.showImportSuccess(project.name)
                     _ingestionState.value = IngestionState.Success(project)
                     refreshRecents()
                     onSuccess(project)

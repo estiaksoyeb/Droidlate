@@ -10,5 +10,6 @@ class DroidlateApplication : Application() {
         if (!Python.isStarted()) {
             Python.start(AndroidPlatform(this))
         }
+        com.droidlate.app.core.notification.NotificationHelper.getInstance(this)
     }
 }
