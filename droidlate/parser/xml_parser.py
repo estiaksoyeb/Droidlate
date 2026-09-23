@@ -11,6 +11,51 @@ class StringEntry:
         self.comment = comment  # Associated developer comments
         self.attrib = attrib or {}
 
+def normalize_attrib_key(key: str) -> str:
+    """
+    Normalizes XML attribute keys parsed by ElementTree (Clark notation)
+    into standard namespace prefixes.
+    e.g. '{http://schemas.android.com/tools}ignore' -> 'tools:ignore'
+    """
+    if not key:
+        return ""
+    if key.startswith('{http://schemas.android.com/tools}'):
+        return 'tools:' + key[len('{http://schemas.android.com/tools}'):]
+    elif key.startswith('{http://schemas.android.com/apk/res/android}'):
+        return 'android:' + key[len('{http://schemas.android.com/apk/res/android}'):]
+    elif key.startswith('{http://schemas.android.com/apk/res-auto}'):
+        return 'app:' + key[len('{http://schemas.android.com/apk/res-auto}'):]
+    elif key.startswith('{urn:oasis:names:tc:xliff:document:1.2}'):
+        return 'xliff:' + key[len('{urn:oasis:names:tc:xliff:document:1.2}'):]
+    return key
+
+def sanitize_target_attributes(attrib: dict | None) -> dict:
+    """
+    Sanitizes source entry attributes before copying/writing them to a target localized XML file.
+    - Excludes internal metadata (keys starting with '__').
+    - Excludes tooling/lint attributes (e.g. tools:* or {http://schemas.android.com/tools}* or ignore).
+    - Excludes 'translatable' attributes.
+    - Excludes unresolved Clark notation keys containing curly braces.
+    """
+    if not attrib:
+        return {}
+    clean_attrib = {}
+    for k, v in attrib.items():
+        if k.startswith('__'):
+            continue
+        # Ignore tools namespace attributes (tools:ignore, tools:targetApi, tools:locale, etc.)
+        if 'http://schemas.android.com/tools' in k or k.startswith('tools:') or k == 'ignore':
+            continue
+        # translatable="false" should never be copied to translated locale files
+        if k == 'translatable':
+            continue
+        # Discard any raw Clark notation {uri} keys that cannot be written safely as XML attributes
+        if '{' in k or '}' in k:
+            continue
+        clean_attrib[k] = v
+    return clean_attrib
+
+
 def unescape_android_string(raw_val: str) -> str:
     """
     Unescapes an Android strings.xml raw value into a plain string for the UI.
@@ -165,7 +210,7 @@ def parse_strings_xml(file_path: str) -> dict[str, StringEntry]:
                 comment = "\n".join(current_comments)
                 
                 # Exclude internal/reserved attributes from standard attributes list
-                attrib = {k: v for k, v in child.attrib.items() if k != 'name'}
+                attrib = {normalize_attrib_key(k): v for k, v in child.attrib.items() if k != 'name'}
                 
                 entries[key] = StringEntry(key, value, comment, attrib)
             current_comments = []
@@ -173,7 +218,7 @@ def parse_strings_xml(file_path: str) -> dict[str, StringEntry]:
             key = child.attrib.get('name')
             if key:
                 comment = "\n".join(current_comments)
-                attrib = {k: v for k, v in child.attrib.items() if k != 'name'}
+                attrib = {normalize_attrib_key(k): v for k, v in child.attrib.items() if k != 'name'}
                 attrib['__resource_type__'] = 'plurals'
                 # Find all <item> children
                 for item in child.findall('item'):
@@ -194,7 +239,7 @@ def parse_strings_xml(file_path: str) -> dict[str, StringEntry]:
             key = child.attrib.get('name')
             if key:
                 comment = "\n".join(current_comments)
-                attrib = {k: v for k, v in child.attrib.items() if k != 'name'}
+                attrib = {normalize_attrib_key(k): v for k, v in child.attrib.items() if k != 'name'}
                 attrib['__resource_type__'] = 'string-array'
                 # Find all <item> children in order
                 for index, item in enumerate(child.findall('item')):
@@ -360,11 +405,13 @@ def write_string_translation(target_path: str, key: str, value: str, attrib: dic
         start_tag_idx = pos['start_idx']
         tag_end_idx = content.find('>', start_tag_idx)
         if tag_end_idx != -1:
-            value_start = tag_end_idx + 1
-            value_end = pos['end_idx']
+            start_tag = content[start_tag_idx:tag_end_idx + 1]
+            # Clean up corrupted namespace artifacts or bogus ignore attributes from existing target start tags
+            clean_tag = re.sub(r'\s+\{[^}]+\}[a-zA-Z0-9_:-]+="[^"]*"', '', start_tag)
+            clean_tag = re.sub(r'\s+(?:tools:)?ignore="[^"]*"', '', clean_tag)
             
-            # Replace the slice
-            new_content = content[:value_start] + escaped_value + content[value_end:]
+            value_end = pos['end_idx']
+            new_content = content[:start_tag_idx] + clean_tag + escaped_value + content[value_end:]
             with open(target_path, 'w', encoding='utf-8') as f:
                 f.write(new_content)
             return True
@@ -412,11 +459,8 @@ def write_string_translation(target_path: str, key: str, value: str, attrib: dic
                     indent = last_line
                 
                 # Build attributes string if any are defined
-                attrib_str = ""
-                if attrib:
-                    for k, v in attrib.items():
-                        if not k.startswith('__'):
-                            attrib_str += f' {k}="{v}"'
+                clean_attrib = sanitize_target_attributes(attrib)
+                attrib_str = "".join(f' {k}="{v}"' for k, v in clean_attrib.items())
                 
                 if is_plural:
                     quantity = parts[2]
@@ -451,11 +495,8 @@ def write_string_translation(target_path: str, key: str, value: str, attrib: dic
             if last_line.isspace():
                 indent = last_line
             
-            attrib_str = ""
-            if attrib:
-                for k, v in attrib.items():
-                    if not k.startswith('__'):
-                        attrib_str += f' {k}="{v}"'
+            clean_attrib = sanitize_target_attributes(attrib)
+            attrib_str = "".join(f' {k}="{v}"' for k, v in clean_attrib.items())
             
             new_element = f'{indent}<string name="{key}"{attrib_str}>{escaped_value}</string>\n'
             new_content = content[:r_resources] + new_element + content[r_resources:]
