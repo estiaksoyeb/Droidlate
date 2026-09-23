@@ -67,6 +67,8 @@ def unescape_android_string(raw_val: str) -> str:
     if not raw_val:
         return ""
 
+    raw_val = raw_val.replace('\r\n', '\n').replace('\r', '\n')
+
     # 1. Check if the string is wrapped in double quotes
     # (Android allows quotes to wrap the whole string to avoid escaping apostrophes)
     is_wrapped = len(raw_val) >= 2 and raw_val.startswith('"') and raw_val.endswith('"')
@@ -260,23 +262,38 @@ def parse_strings_xml(file_path: str) -> dict[str, StringEntry]:
 
     return entries
 
+def find_tag_end(content: str, start_idx: int) -> int:
+    """Finds the closing '>' of an XML tag starting at start_idx, ignoring '>' inside attribute quotes."""
+    in_quote = None
+    for i in range(start_idx, len(content)):
+        char = content[i]
+        if in_quote:
+            if char == in_quote:
+                in_quote = None
+        else:
+            if char in ('"', "'"):
+                in_quote = char
+            elif char == '>':
+                return i
+    return -1
+
 def parse_xml_positions(content: str):
     """
     Parses XML content and returns:
-    1. A dictionary of element positions: key -> { 'start_idx': int, 'end_idx': int }
+    1. A dictionary of element positions: key -> { 'start_idx': int, 'end_idx': int, 'is_self_closing': bool }
        Keys can be standard (e.g. 'my_key'), plurals (e.g. 'my_plural#plural#one'), or arrays (e.g. 'my_array#array#0').
-    2. A dictionary of parent container positions: container_key -> { 'type': str, 'start_idx': int, 'end_idx': int, 'inner_start': int, 'inner_end': int }
+    2. A dictionary of parent container positions: container_key -> { 'type': str, 'start_idx': int, 'end_idx': int, 'inner_start': int, 'inner_end': int, 'is_self_closing': bool }
        Container keys are e.g. 'my_plural#plural' or 'my_array#array'.
     """
     lines = content.splitlines(keepends=True)
+    line_starts = [0]
+    for line in lines:
+        line_starts.append(line_starts[-1] + len(line))
     
     def get_index(line_num, col_num):
-        idx = 0
-        for i in range(line_num - 1):
-            if i < len(lines):
-                idx += len(lines[i])
-        idx += col_num
-        return idx
+        if 1 <= line_num <= len(lines):
+            return line_starts[line_num - 1] + col_num
+        return line_starts[-1] + col_num
 
     item_positions = {}
     parent_positions = {}
@@ -287,39 +304,45 @@ def parse_xml_positions(content: str):
     cur_parent_name = None
     cur_parent_start = None
     cur_parent_inner_start = None
+    cur_parent_self_closing = False
     cur_item_index = 0
     cur_item_quantity = None
     cur_item_start = None
+    cur_item_self_closing = False
 
     def start_element(name, attrs):
-        nonlocal cur_parent_type, cur_parent_name, cur_parent_start, cur_parent_inner_start
-        nonlocal cur_item_index, cur_item_quantity, cur_item_start
+        nonlocal cur_parent_type, cur_parent_name, cur_parent_start, cur_parent_inner_start, cur_parent_self_closing
+        nonlocal cur_item_index, cur_item_quantity, cur_item_start, cur_item_self_closing
         
         idx = get_index(parser.CurrentLineNumber, parser.CurrentColumnNumber)
+        tag_end = find_tag_end(content, idx)
+        self_closing = tag_end != -1 and content[idx:tag_end].rstrip().endswith('/')
         
         if name in ('plurals', 'string-array'):
             cur_parent_type = name
             cur_parent_name = attrs.get('name')
             cur_parent_start = idx
-            tag_end = content.find('>', idx)
+            cur_parent_self_closing = self_closing
             cur_parent_inner_start = tag_end + 1 if tag_end != -1 else idx
             cur_item_index = 0
         elif name == 'string':
             string_name = attrs.get('name')
             if string_name:
                 item_positions[string_name] = {
-                    'start_idx': idx
+                    'start_idx': idx,
+                    'is_self_closing': self_closing
                 }
         elif name == 'item' and cur_parent_type:
             cur_item_start = idx
+            cur_item_self_closing = self_closing
             if cur_parent_type == 'plurals':
                 cur_item_quantity = attrs.get('quantity')
             else:
                 cur_item_quantity = None
 
     def end_element(name):
-        nonlocal cur_parent_type, cur_parent_name, cur_parent_start, cur_parent_inner_start
-        nonlocal cur_item_index, cur_item_quantity, cur_item_start
+        nonlocal cur_parent_type, cur_parent_name, cur_parent_start, cur_parent_inner_start, cur_parent_self_closing
+        nonlocal cur_item_index, cur_item_quantity, cur_item_start, cur_item_self_closing
         
         idx = get_index(parser.CurrentLineNumber, parser.CurrentColumnNumber)
         
@@ -331,12 +354,14 @@ def parse_xml_positions(content: str):
                     'start_idx': cur_parent_start,
                     'end_idx': idx,
                     'inner_start': cur_parent_inner_start,
-                    'inner_end': idx
+                    'inner_end': idx,
+                    'is_self_closing': cur_parent_self_closing
                 }
             cur_parent_type = None
             cur_parent_name = None
             cur_parent_start = None
             cur_parent_inner_start = None
+            cur_parent_self_closing = False
         elif name == 'string':
             for k, pos in reversed(list(item_positions.items())):
                 if '#' not in k and 'end_idx' not in pos:
@@ -348,18 +373,21 @@ def parse_xml_positions(content: str):
                     key = f"{cur_parent_name}#plural#{cur_item_quantity}"
                     item_positions[key] = {
                         'start_idx': cur_item_start,
-                        'end_idx': idx
+                        'end_idx': idx,
+                        'is_self_closing': cur_item_self_closing
                     }
             elif cur_parent_type == 'string-array':
                 if cur_parent_name:
                     key = f"{cur_parent_name}#array#{cur_item_index}"
                     item_positions[key] = {
                         'start_idx': cur_item_start,
-                        'end_idx': idx
+                        'end_idx': idx,
+                        'is_self_closing': cur_item_self_closing
                     }
                     cur_item_index += 1
             cur_item_start = None
             cur_item_quantity = None
+            cur_item_self_closing = False
 
     parser.StartElementHandler = start_element
     parser.EndElementHandler = end_element
@@ -403,15 +431,21 @@ def write_string_translation(target_path: str, key: str, value: str, attrib: dic
     if key in item_positions:
         pos = item_positions[key]
         start_tag_idx = pos['start_idx']
-        tag_end_idx = content.find('>', start_tag_idx)
+        tag_end_idx = find_tag_end(content, start_tag_idx)
         if tag_end_idx != -1:
             start_tag = content[start_tag_idx:tag_end_idx + 1]
             # Clean up corrupted namespace artifacts or bogus ignore attributes from existing target start tags
             clean_tag = re.sub(r'\s+\{[^}]+\}[a-zA-Z0-9_:-]+="[^"]*"', '', start_tag)
             clean_tag = re.sub(r'\s+(?:tools:)?ignore="[^"]*"', '', clean_tag)
             
-            value_end = pos['end_idx']
-            new_content = content[:start_tag_idx] + clean_tag + escaped_value + content[value_end:]
+            is_self_closing = pos.get('is_self_closing', False)
+            if is_self_closing:
+                clean_tag = re.sub(r'\s*/\s*>$', '>', clean_tag)
+                close_tag = "</item>" if (is_plural or is_array) else "</string>"
+                new_content = content[:start_tag_idx] + clean_tag + escaped_value + close_tag + content[tag_end_idx + 1:]
+            else:
+                value_end = pos['end_idx']
+                new_content = content[:start_tag_idx] + clean_tag + escaped_value + content[value_end:]
             with open(target_path, 'w', encoding='utf-8') as f:
                 f.write(new_content)
             return True
@@ -511,7 +545,14 @@ def remove_string_translation(target_path: str, key: str) -> bool:
     Removes a translation for a specific key in target_path if it exists.
     Preserves comments and formatting of all other tags.
     """
-    if not os.path.exists(target_path):
+    return remove_string_translations(target_path, [key])
+
+def remove_string_translations(target_path: str, keys: list[str] | set[str]) -> bool:
+    """
+    Removes translations for multiple keys in target_path in a single pass.
+    Preserves comments and formatting of all other tags.
+    """
+    if not os.path.exists(target_path) or not keys:
         return False
 
     with open(target_path, 'r', encoding='utf-8') as f:
@@ -519,19 +560,30 @@ def remove_string_translation(target_path: str, key: str) -> bool:
 
     item_positions, parent_positions = parse_xml_positions(content)
 
-    if key in item_positions:
+    keys_to_del = [k for k in keys if k in item_positions]
+    if not keys_to_del:
+        return False
+
+    slices = []
+    affected_parents = set()
+
+    for key in keys_to_del:
         pos = item_positions[key]
         del_start = pos['start_idx']
-        
+
         is_plural = '#plural#' in key
         is_array = '#array#' in key
-        end_tag = "</item>" if (is_plural or is_array) else "</string>"
-        del_end = pos['end_idx'] + len(end_tag)
-        
+        is_self_closing = pos.get('is_self_closing', False)
+        if is_self_closing:
+            del_end = pos['end_idx']
+        else:
+            end_tag = "</item>" if (is_plural or is_array) else "</string>"
+            del_end = pos['end_idx'] + len(end_tag)
+
         # Grab leading whitespace (indentation)
         while del_start > 0 and content[del_start - 1] in (' ', '\t'):
             del_start -= 1
-            
+
         # Grab trailing newline
         if del_end < len(content) and content[del_end] == '\n':
             del_end += 1
@@ -539,26 +591,36 @@ def remove_string_translation(target_path: str, key: str) -> bool:
             del_end += 1
             if del_end < len(content) and content[del_end] == '\n':
                 del_end += 1
-                
-        # Slice it out
-        new_content = content[:del_start] + content[del_end:]
-        
-        # If it was a plural or array item, check if the parent container is now empty
+
+        slices.append((del_start, del_end))
         if is_plural or is_array:
             parts = key.split('#')
-            base_key = parts[0]
             container_type = 'plural' if is_plural else 'array'
+            affected_parents.add((parts[0], container_type))
+
+    # Sort descending by start index to delete from back to front without shifting offsets
+    slices.sort(key=lambda s: s[0], reverse=True)
+    new_content = content
+    for d_start, d_end in slices:
+        new_content = new_content[:d_start] + new_content[d_end:]
+
+    # Clean up empty parent containers if any plural or array items were removed
+    if affected_parents:
+        new_item_pos, new_parent_pos = parse_xml_positions(new_content)
+        parent_slices = []
+        for base_key, container_type in affected_parents:
             parent_key = f"{base_key}#{container_type}"
-            
-            new_item_positions, new_parent_positions = parse_xml_positions(new_content)
-            has_remaining_items = any(k.startswith(f"{base_key}#{container_type}#") for k in new_item_positions.keys())
-            
-            if not has_remaining_items and parent_key in new_parent_positions:
-                parent_pos = new_parent_positions[parent_key]
-                p_del_start = parent_pos['start_idx']
-                p_end_tag = "</plurals>" if is_plural else "</string-array>"
-                p_del_end = parent_pos['end_idx'] + len(p_end_tag)
-                
+            has_remaining = any(k.startswith(f"{base_key}#{container_type}#") for k in new_item_pos.keys())
+            if not has_remaining and parent_key in new_parent_pos:
+                p_pos = new_parent_pos[parent_key]
+                p_del_start = p_pos['start_idx']
+                p_self_closing = p_pos.get('is_self_closing', False)
+                if p_self_closing:
+                    p_del_end = p_pos['end_idx']
+                else:
+                    p_end_tag = "</plurals>" if container_type == 'plural' else "</string-array>"
+                    p_del_end = p_pos['end_idx'] + len(p_end_tag)
+
                 while p_del_start > 0 and new_content[p_del_start - 1] in (' ', '\t'):
                     p_del_start -= 1
                 if p_del_end < len(new_content) and new_content[p_del_end] == '\n':
@@ -567,11 +629,13 @@ def remove_string_translation(target_path: str, key: str) -> bool:
                     p_del_end += 1
                     if p_del_end < len(new_content) and new_content[p_del_end] == '\n':
                         p_del_end += 1
-                new_content = new_content[:p_del_start] + new_content[p_del_end:]
-                
-        with open(target_path, 'w', encoding='utf-8') as f:
-            f.write(new_content)
-        return True
+                parent_slices.append((p_del_start, p_del_end))
 
-    return False
+        parent_slices.sort(key=lambda s: s[0], reverse=True)
+        for p_start, p_end in parent_slices:
+            new_content = new_content[:p_start] + new_content[p_end:]
+
+    with open(target_path, 'w', encoding='utf-8') as f:
+        f.write(new_content)
+    return True
 

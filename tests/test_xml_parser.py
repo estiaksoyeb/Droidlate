@@ -8,6 +8,7 @@ from droidlate.parser.xml_parser import (
     parse_strings_xml,
     write_string_translation,
     remove_string_translation,
+    remove_string_translations,
     normalize_attrib_key,
     sanitize_target_attributes
 )
@@ -142,6 +143,187 @@ class TestXmlParser(unittest.TestCase):
 
         self.assertNotIn("ignore=", content)
         self.assertIn('<string name="ratio_key">New Arabic</string>', content)
+
+    def test_literal_line_breaks_equality(self):
+        multiline_xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="multiline_literal">Line 1
+
+Line 2
+Line 3</string>
+    <string name="multiline_escaped">Line 1\\n\\nLine 2\\nLine 3</string>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(multiline_xml)
+
+        entries = parse_strings_xml(self.xml_path)
+        self.assertIn("multiline_literal", entries)
+        self.assertIn("multiline_escaped", entries)
+        self.assertEqual(entries["multiline_literal"].value, "Line 1\n\nLine 2\nLine 3")
+        self.assertEqual(entries["multiline_escaped"].value, "Line 1\n\nLine 2\nLine 3")
+        self.assertEqual(entries["multiline_literal"].value, entries["multiline_escaped"].value)
+
+    def test_multiline_write_and_replace(self):
+        multiline_xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="before">Before</string>
+    <string name="multiline_literal">Line 1
+
+Line 2
+Line 3</string>
+    <string name="after">After</string>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(multiline_xml)
+
+        write_string_translation(self.xml_path, "multiline_literal", "New 1\nNew 2", {})
+        entries = parse_strings_xml(self.xml_path)
+        self.assertEqual(entries["multiline_literal"].value, "New 1\nNew 2")
+        self.assertEqual(entries["before"].value, "Before")
+        self.assertEqual(entries["after"].value, "After")
+
+        with open(self.xml_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn('<string name="multiline_literal">New 1\\nNew 2</string>', content)
+        self.assertIn('<string name="before">Before</string>', content)
+        self.assertIn('<string name="after">After</string>', content)
+
+    def test_multiline_remove(self):
+        multiline_xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="before">Before</string>
+    <string name="multiline_literal">Line 1
+
+Line 2
+Line 3</string>
+    <string name="after">After</string>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(multiline_xml)
+
+        remove_string_translation(self.xml_path, "multiline_literal")
+        entries = parse_strings_xml(self.xml_path)
+        self.assertNotIn("multiline_literal", entries)
+        self.assertIn("before", entries)
+        self.assertIn("after", entries)
+
+        with open(self.xml_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertNotIn("multiline_literal", content)
+        self.assertNotIn("Line 1", content)
+        self.assertIn('<string name="before">Before</string>', content)
+        self.assertIn('<string name="after">After</string>', content)
+
+    def test_self_closing_write_and_remove(self):
+        xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="empty" />
+    <string name="other">Other</string>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(xml)
+
+        write_string_translation(self.xml_path, "empty", "Now Filled", {})
+        entries = parse_strings_xml(self.xml_path)
+        self.assertEqual(entries["empty"].value, "Now Filled")
+        self.assertEqual(entries["other"].value, "Other")
+
+        with open(self.xml_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn('<string name="empty">Now Filled</string>', content)
+
+        # Reset and test remove self closing tag
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(xml)
+        remove_string_translation(self.xml_path, "empty")
+        entries_after = parse_strings_xml(self.xml_path)
+        self.assertNotIn("empty", entries_after)
+        self.assertIn("other", entries_after)
+
+        with open(self.xml_path, "r", encoding="utf-8") as f:
+            content_after = f.read()
+        self.assertNotIn("empty", content_after)
+        self.assertIn('<string name="other">Other</string>', content_after)
+
+    def test_batch_remove_string_translations(self):
+        xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s1">1</string>
+    <string name="s2">2</string>
+    <string name="s3">3</string>
+    <plurals name="p1">
+        <item quantity="one">one</item>
+        <item quantity="other">other</item>
+    </plurals>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(xml)
+
+        remove_string_translations(self.xml_path, ["s1", "s3", "p1#plural#one"])
+        entries = parse_strings_xml(self.xml_path)
+        self.assertNotIn("s1", entries)
+        self.assertIn("s2", entries)
+        self.assertNotIn("s3", entries)
+        self.assertNotIn("p1#plural#one", entries)
+        self.assertIn("p1#plural#other", entries)
+
+        # Batch remove remaining plural item -> should remove empty parent container
+        remove_string_translations(self.xml_path, ["p1#plural#other"])
+        entries2 = parse_strings_xml(self.xml_path)
+        self.assertNotIn("p1#plural#other", entries2)
+        with open(self.xml_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertNotIn("<plurals", content)
+        self.assertIn('<string name="s2">2</string>', content)
+
+    def test_prune_nontranslatable_strings_batch(self):
+        from droidlate.parser.diff_engine import prune_nontranslatable_strings, load_metadata, save_metadata
+
+        src_xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translatable_key">Source 1</string>
+    <string name="non_translatable_key" translatable="false">Source 2</string>
+    <string name="another_non_trans" translatable="false">Source 3</string>
+</resources>'''
+        tgt_xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translatable_key">Target 1</string>
+    <string name="non_translatable_key">Target 2</string>
+    <string name="another_non_trans">Target 3</string>
+</resources>'''
+        src_path = os.path.join(self.test_dir, "src.xml")
+        tgt_path = os.path.join(self.test_dir, "tgt.xml")
+        with open(src_path, "w", encoding="utf-8") as f:
+            f.write(src_xml)
+        with open(tgt_path, "w", encoding="utf-8") as f:
+            f.write(tgt_xml)
+
+        src_entries = parse_strings_xml(src_path)
+        tgt_entries = parse_strings_xml(tgt_path)
+
+        metadata = {
+            "translatable_key": {"source_hash": "abc", "translated_value": "Target 1"},
+            "non_translatable_key": {"source_hash": "def", "translated_value": "Target 2"},
+            "another_non_trans": {"source_hash": "ghi", "translated_value": "Target 3"}
+        }
+        save_metadata(tgt_path, metadata)
+
+        changed = prune_nontranslatable_strings(tgt_path, src_entries, tgt_entries)
+        self.assertTrue(changed)
+
+        self.assertIn("translatable_key", tgt_entries)
+        self.assertNotIn("non_translatable_key", tgt_entries)
+        self.assertNotIn("another_non_trans", tgt_entries)
+
+        tgt_entries_file = parse_strings_xml(tgt_path)
+        self.assertIn("translatable_key", tgt_entries_file)
+        self.assertNotIn("non_translatable_key", tgt_entries_file)
+        self.assertNotIn("another_non_trans", tgt_entries_file)
+
+        updated_meta = load_metadata(tgt_path)
+        self.assertIn("translatable_key", updated_meta)
+        self.assertNotIn("non_translatable_key", updated_meta)
+        self.assertNotIn("another_non_trans", updated_meta)
 
 if __name__ == "__main__":
     unittest.main()

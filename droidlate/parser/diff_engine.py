@@ -313,35 +313,36 @@ def is_key_orphaned(key: str, source_entries: dict) -> bool:
 def prune_nontranslatable_strings(target_path: str, source_entries: dict, target_entries: dict) -> bool:
     """
     Finds target entries that are marked translatable="false" in source_entries,
-    and automatically prunes them from target XML and metadata sidecars.
+    and automatically prunes them from target XML and metadata sidecars in a single batch.
     Returns True if any changes were made.
     """
-    from .xml_parser import remove_string_translation
+    from .xml_parser import remove_string_translations
     
-    changed = False
-    metadata = None
-    
-    # We copy keys to avoid modifying dict while iterating
-    source_keys = list(source_entries.keys())
-    for key in source_keys:
-        if key in source_entries:
-            entry = source_entries[key]
-            if entry.attrib.get('translatable') == 'false':
-                if key in target_entries:
-                    # Remove from target XML file
-                    remove_string_translation(target_path, key)
-                    # Remove from target_entries dict
-                    del target_entries[key]
-                    
-                    # Remove from metadata sidecar
-                    if metadata is None:
-                        metadata = load_metadata(target_path)
-                    if key in metadata:
-                        del metadata[key]
-                        
-                    changed = True
+    keys_to_prune = []
+    for key, entry in source_entries.items():
+        if entry.attrib.get('translatable') == 'false':
+            if key in target_entries:
+                keys_to_prune.append(key)
                 
-    if changed and metadata is not None:
+    if not keys_to_prune:
+        return False
+
+    # Remove all from target XML file in a single pass
+    remove_string_translations(target_path, keys_to_prune)
+    
+    # Remove from target_entries dict
+    for key in keys_to_prune:
+        target_entries.pop(key, None)
+        
+    # Remove from metadata sidecar
+    metadata = load_metadata(target_path)
+    meta_changed = False
+    for key in keys_to_prune:
+        if key in metadata:
+            del metadata[key]
+            meta_changed = True
+            
+    if meta_changed:
         save_metadata(target_path, metadata)
         
-    return changed
+    return True
