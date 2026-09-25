@@ -303,11 +303,35 @@ function confirmAddLanguage() {
     });
 }
 
-// 1. View Routing & Dashboard loading
+// 1. View Routing & URL Hash sync
+function parseUrlRoute() {
+    const raw = (window.location.hash || '').replace(/^#\/?/, '');
+    if (!raw) return { lang: null, key: null };
+    const parts = raw.split('/');
+    const lang = parts[0] ? decodeURIComponent(parts[0]) : null;
+    const key = parts[1] ? decodeURIComponent(parts[1]) : null;
+    return { lang, key };
+}
+
+function updateUrlHash(lang, key) {
+    if (!lang) {
+        if (window.location.hash && window.location.hash !== '#/' && window.location.hash !== '#') {
+            history.pushState(null, '', window.location.pathname + window.location.search);
+        }
+        return;
+    }
+    const hash = key ? `#/${encodeURIComponent(lang)}/${encodeURIComponent(key)}` : `#/${encodeURIComponent(lang)}`;
+    if (window.location.hash !== hash) {
+        history.replaceState(null, '', hash);
+    }
+}
+
 function showDashboard() {
     state.activeLang = null;
     state.strings = [];
     state.currentKey = null;
+    
+    updateUrlHash(null, null);
     
     // Toggle active view CSS
     el.dashboardView.classList.add('active');
@@ -417,7 +441,10 @@ function renderDashboardCards(languages) {
             </div>
         `;
 
-        card.addEventListener('click', () => showEditor(lang.folder));
+        card.addEventListener('click', () => {
+            history.pushState(null, '', `#/${encodeURIComponent(lang.folder)}`);
+            showEditor(lang.folder);
+        });
         el.languagesGrid.appendChild(card);
     });
 }
@@ -430,7 +457,7 @@ function updateOverallProgress(languages) {
 }
 
 // 2. Editor Workspace actions
-function showEditor(langFolder) {
+function showEditor(langFolder, initialKey = null) {
     state.activeLang = langFolder;
     
     // Toggle active view CSS
@@ -444,11 +471,18 @@ function showEditor(langFolder) {
         .then(data => {
             state.strings = data.strings;
 
+            const targetItem = initialKey ? state.strings.find(s => s.key === initialKey) : null;
+
             // Default filter to untranslated, but fallback if empty
             const untranslatedCount = state.strings.filter(s => s.status === 'untranslated').length;
             const outdatedCount = state.strings.filter(s => s.status === 'outdated' || s.status === 'warnings').length;
             
-            if (untranslatedCount > 0) {
+            if (targetItem) {
+                if (targetItem.status === 'untranslated') state.activeFilter = 'untranslated';
+                else if (targetItem.status === 'outdated' || targetItem.status === 'warnings') state.activeFilter = 'outdated';
+                else if (targetItem.is_duplicate) state.activeFilter = 'duplicates';
+                else state.activeFilter = 'all';
+            } else if (untranslatedCount > 0) {
                 state.activeFilter = 'untranslated';
             } else if (outdatedCount > 0) {
                 state.activeFilter = 'outdated';
@@ -461,8 +495,10 @@ function showEditor(langFolder) {
 
             applySidebarFilters();
             
-            // Select first key that matches the filter
-            if (state.filteredStrings.length > 0) {
+            // Select requested key or first matching key
+            if (targetItem) {
+                selectKey(targetItem.key);
+            } else if (state.filteredStrings.length > 0) {
                 selectKey(state.filteredStrings[0].key);
             }
         })
@@ -570,6 +606,9 @@ function updateEditorStats() {
 
 function selectKey(key) {
     state.currentKey = key;
+    if (state.activeLang) {
+        updateUrlHash(state.activeLang, key);
+    }
     
     // Toggle active classes for mobile view
     el.editorLayoutContainer.classList.remove('show-sidebar');
@@ -1535,5 +1574,45 @@ window.toggleWarningSuppression = toggleWarningSuppression;
 // App Initialization Entry
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
-    showDashboard();
+
+    // Listen for browser navigation (Back / Forward)
+    window.addEventListener('popstate', () => {
+        const route = parseUrlRoute();
+        if (route.lang) {
+            if (state.activeLang !== route.lang) {
+                showEditor(route.lang, route.key);
+            } else if (route.key && state.currentKey !== route.key) {
+                selectKey(route.key);
+            }
+        } else {
+            if (el.editorView.classList.contains('active')) {
+                showDashboard();
+            }
+        }
+    });
+
+    const route = parseUrlRoute();
+    if (route.lang) {
+        // Fetch project metadata in background for header and status bar
+        fetch('/api/project')
+            .then(res => res.json())
+            .then(data => {
+                state.project = data;
+                if (data.mode === 'single') {
+                    el.projectPath.textContent = `Single File Mode: ${data.target_file}`;
+                    el.statusBarLeft.textContent = "Running in single file mode";
+                    el.statusBarRight.textContent = "Locales: 1";
+                    if (el.btnAddLanguage) el.btnAddLanguage.style.display = 'none';
+                } else {
+                    el.projectPath.textContent = `Directory: ${data.res_dir}`;
+                    el.statusBarLeft.textContent = `Scanned resource directory successfully`;
+                    el.statusBarRight.textContent = `Locales: ${data.languages.length}`;
+                    if (el.btnAddLanguage) el.btnAddLanguage.style.display = 'inline-block';
+                }
+            })
+            .catch(() => {});
+        showEditor(route.lang, route.key);
+    } else {
+        showDashboard();
+    }
 });
