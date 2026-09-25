@@ -125,5 +125,61 @@ class TestServerEndpoints(unittest.TestCase):
             self.assertEqual(resp_css.status_code, 200)
             self.assertIn(b"plural-ref-card", resp_css.data)
 
+    def test_duplicates_api(self):
+        # Inject duplicates into target strings.xml
+        dup_tgt_xml = """<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="title">Mi App 1</string>
+    <string name="title">Mi App 2</string>
+    <string name="other">Otro</string>
+    <string name="other">Otro 2</string>
+</resources>
+"""
+        with open(self.tgt_xml, "w", encoding="utf-8") as f:
+            f.write(dup_tgt_xml)
+
+        # Test /api/project reports duplicates
+        resp_proj = self.client.get("/api/project")
+        self.assertEqual(resp_proj.status_code, 200)
+        proj_data = resp_proj.get_json()
+        lang_card = proj_data["languages"][0]
+        self.assertEqual(lang_card["duplicates"], 2)
+
+        # Test /api/strings reports duplicate details
+        resp_str = self.client.get("/api/strings?lang=values-es")
+        self.assertEqual(resp_str.status_code, 200)
+        strings_dict = {s["key"]: s for s in resp_str.get_json()["strings"]}
+        self.assertTrue(strings_dict["title"]["is_duplicate"])
+        self.assertEqual(strings_dict["title"]["duplicate_count"], 2)
+        self.assertEqual(len(strings_dict["title"]["duplicate_occurrences"]), 2)
+
+        # Test deduplicate single key
+        resp_dedup_single = self.client.post("/api/deduplicate", json={
+            "lang": "values-es",
+            "key": "title",
+            "keep": "last"
+        })
+        self.assertEqual(resp_dedup_single.status_code, 200)
+        self.assertEqual(resp_dedup_single.get_json()["removed_count"], 1)
+
+        # Verify title is deduplicated but other is still duplicated
+        with open(self.tgt_xml, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertEqual(content.count('<string name="title">'), 1)
+        self.assertEqual(content.count('<string name="other">'), 2)
+        self.assertIn('<string name="title">Mi App 2</string>', content)
+
+        # Test deduplicate all keys in file
+        resp_dedup_all = self.client.post("/api/deduplicate", json={
+            "lang": "values-es",
+            "keep": "last"
+        })
+        self.assertEqual(resp_dedup_all.status_code, 200)
+        self.assertEqual(resp_dedup_all.get_json()["removed_count"], 1)
+
+        with open(self.tgt_xml, "r", encoding="utf-8") as f:
+            final_content = f.read()
+        self.assertEqual(final_content.count('<string name="other">'), 1)
+
 if __name__ == "__main__":
     unittest.main()
