@@ -65,9 +65,11 @@
                             <button class="filter-tab" data-filter="untranslated">Untranslated <span class="tab-count">(0)</span></button>
                             <button class="filter-tab" data-filter="outdated">Outdated <span class="tab-count">(0)</span></button>
                             <button class="filter-tab" data-filter="warnings">Warnings <span class="tab-count">(0)</span></button>
+                            <button class="filter-tab" data-filter="duplicates">Duplicates <span class="tab-count">(0)</span></button>
                             <button class="filter-tab" data-filter="readonly">Read-Only <span class="tab-count">(0)</span></button>
                             <button class="filter-tab" data-filter="orphaned">Orphaned <span class="tab-count">(0)</span></button>
                         </div>
+                        <button id="btn-fix-duplicates" class="btn-warning btn-tiny" style="display: none; width: 100%; margin-top: 8px;">⚠️ Fix All Duplicates</button>
                         <div class="sidebar-list-container">
                             <ul id="keys-list" class="keys-list">
                                 <!-- Keys list items populated dynamically -->
@@ -98,6 +100,20 @@
                             <div class="attribs-block">
                                 <span class="block-label">XML Attributes</span>
                                 <p id="current-key-attribs" class="attribs-text">None</p>
+                            </div>
+                        </div>
+
+                        <!-- Duplicate Warning Card -->
+                        <div id="duplicate-warning-card" class="duplicate-warning-card" style="display: none;">
+                            <div class="duplicate-header">
+                                <span class="duplicate-icon">⚠️</span>
+                                <span id="duplicate-title" class="duplicate-title">Duplicate Key Detected</span>
+                            </div>
+                            <div id="duplicate-details" class="duplicate-details">
+                                <!-- Injected dynamically -->
+                            </div>
+                            <div class="duplicate-actions">
+                                <button id="btn-deduplicate-key" class="btn-secondary btn-danger-outline">Deduplicate (Keep Current)</button>
                             </div>
                         </div>
 

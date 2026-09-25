@@ -3,7 +3,7 @@ import re
 from flask import Flask, request, jsonify, send_from_directory
 from typing import Optional
 
-from ..parser.xml_parser import parse_strings_xml, write_string_translation, remove_string_translation
+from ..parser.xml_parser import parse_strings_xml, write_string_translation, remove_string_translation, find_duplicate_keys, deduplicate_strings
 from ..parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, rebuild_tm_cache, get_tm_suggestion, prune_nontranslatable_strings, is_key_orphaned
 from ..translator.engine import TranslationOrchestrator
 
@@ -37,6 +37,9 @@ def get_project():
             target_entries = parse_strings_xml(TARGET_XML)
         metadata = load_metadata(TARGET_XML)
         rebuild_tm_cache(TARGET_XML, source_entries, target_entries)
+        
+        source_dups = find_duplicate_keys(SOURCE_XML) if os.path.exists(SOURCE_XML) else {}
+        target_dups = find_duplicate_keys(TARGET_XML) if os.path.exists(TARGET_XML) else {}
         
         metadata_changed = False
         for key, entry in source_entries.items():
@@ -82,6 +85,7 @@ def get_project():
             "res_dir": None,
             "source_file": SOURCE_XML,
             "target_file": TARGET_XML,
+            "source_duplicates": len(source_dups),
             "languages": [{
                 "folder": folder,
                 "locale": locale,
@@ -90,6 +94,7 @@ def get_project():
                 "outdated": outdated,
                 "untranslated": untranslated,
                 "orphaned": orphaned,
+                "duplicates": len(target_dups),
                 "total": total,
                 "target_path": TARGET_XML
             }]
@@ -102,6 +107,7 @@ def get_project():
             return jsonify({"error": "Base strings.xml not found."}), 404
             
         source_entries = parse_strings_xml(source_path)
+        source_dups = find_duplicate_keys(source_path) if os.path.exists(source_path) else {}
         total_keys = len(source_entries)
         
         languages_list = []
@@ -116,6 +122,7 @@ def get_project():
                     target_entries = parse_strings_xml(target_xml)
                 metadata = load_metadata(target_xml)
                 rebuild_tm_cache(target_xml, source_entries, target_entries)
+                target_dups = find_duplicate_keys(target_xml) if os.path.exists(target_xml) else {}
                 
                 metadata_changed = False
                 for key, entry in source_entries.items():
@@ -163,6 +170,7 @@ def get_project():
                     "outdated": outdated,
                     "untranslated": untranslated,
                     "orphaned": orphaned,
+                    "duplicates": len(target_dups),
                     "total": total_keys,
                     "target_path": target_xml
                 })
@@ -171,6 +179,7 @@ def get_project():
             "mode": "directory",
             "res_dir": RES_DIR,
             "source_file": source_path,
+            "source_duplicates": len(source_dups),
             "languages": sorted(languages_list, key=lambda x: x["folder"])
         })
 
@@ -199,6 +208,9 @@ def get_strings():
         target_entries = parse_strings_xml(tgt_path)
     metadata = load_metadata(tgt_path)
     rebuild_tm_cache(tgt_path, source_entries, target_entries)
+    
+    target_dups = find_duplicate_keys(tgt_path) if os.path.exists(tgt_path) else {}
+    source_dups = find_duplicate_keys(src_path) if os.path.exists(src_path) else {}
     
     metadata_changed = False
     
@@ -230,6 +242,8 @@ def get_strings():
         src_hash = compute_source_hash(current_norm)
         
         is_ignored = bool(meta_val.get("ignore_warnings", False)) if meta_val else False
+        tgt_occ = target_dups.get(key, [])
+        src_occ = source_dups.get(key, [])
         strings_list.append({
             "key": key,
             "source": entry.value,
@@ -238,12 +252,25 @@ def get_strings():
             "comment": entry.comment,
             "status": status,
             "attrib": entry.attrib,
-            "ignore_warnings": is_ignored
+            "ignore_warnings": is_ignored,
+            "is_duplicate": len(tgt_occ) > 1,
+            "duplicate_count": len(tgt_occ),
+            "duplicate_occurrences": [
+                {"line": o.get("line"), "value": o.get("value"), "tag": o.get("tag")}
+                for o in tgt_occ
+            ],
+            "is_source_duplicate": len(src_occ) > 1,
+            "source_duplicate_count": len(src_occ),
+            "source_duplicate_occurrences": [
+                {"line": o.get("line"), "value": o.get("value"), "tag": o.get("tag")}
+                for o in src_occ
+            ]
         })
         
     # 2. Add target entries not in source entries (orphans or target-specific plural/array forms)
     for key in target_entries.keys():
         if key not in source_entries:
+            tgt_occ = target_dups.get(key, [])
             if is_key_orphaned(key, source_entries):
                 strings_list.append({
                     "key": key,
@@ -253,7 +280,16 @@ def get_strings():
                     "comment": "Orphaned key (no longer exists in source strings.xml)",
                     "status": "orphaned",
                     "attrib": target_entries[key].attrib,
-                    "ignore_warnings": False
+                    "ignore_warnings": False,
+                    "is_duplicate": len(tgt_occ) > 1,
+                    "duplicate_count": len(tgt_occ),
+                    "duplicate_occurrences": [
+                        {"line": o.get("line"), "value": o.get("value"), "tag": o.get("tag")}
+                        for o in tgt_occ
+                    ],
+                    "is_source_duplicate": False,
+                    "source_duplicate_count": 0,
+                    "source_duplicate_occurrences": []
                 })
             else:
                 # Valid target plural or array form (e.g. Russian few/many, Arabic dual)
@@ -286,11 +322,22 @@ def get_strings():
                     "comment": ref_entry.comment if ref_entry else None,
                     "status": status,
                     "attrib": target_entries[key].attrib,
-                    "ignore_warnings": is_ignored
+                    "ignore_warnings": is_ignored,
+                    "is_duplicate": len(tgt_occ) > 1,
+                    "duplicate_count": len(tgt_occ),
+                    "duplicate_occurrences": [
+                        {"line": o.get("line"), "value": o.get("value"), "tag": o.get("tag")}
+                        for o in tgt_occ
+                    ],
+                    "is_source_duplicate": False,
+                    "source_duplicate_count": 0,
+                    "source_duplicate_occurrences": []
                 })
         
     return jsonify({
         "locale": lang_folder or os.path.basename(os.path.dirname(tgt_path)),
+        "duplicate_count": len(target_dups),
+        "source_duplicate_count": len(source_dups),
         "strings": strings_list
     })
 
@@ -491,6 +538,36 @@ def prune_string():
         save_metadata(tgt_path, metadata)
         
     return jsonify({"success": success})
+
+@app.route('/api/deduplicate', methods=['POST'])
+def deduplicate_endpoint():
+    """Removes duplicate string entries from target XML or source XML."""
+    global RES_DIR, SOURCE_XML, TARGET_XML, IS_SINGLE_FILE_MODE
+    data = request.json or {}
+    lang_folder = data.get('lang')
+    key = data.get('key')
+    keep = data.get('keep', 'last')
+    target_type = data.get('target', 'target')  # 'target' or 'source'
+    
+    if target_type == 'source':
+        if IS_SINGLE_FILE_MODE:
+            xml_path = SOURCE_XML
+        else:
+            xml_path = os.path.join(RES_DIR, "values", "strings.xml")
+    else:
+        if IS_SINGLE_FILE_MODE:
+            xml_path = TARGET_XML
+        else:
+            if not lang_folder:
+                return jsonify({"error": "Missing lang."}), 400
+            xml_path = os.path.join(RES_DIR, lang_folder, "strings.xml")
+            
+    if not xml_path or not os.path.exists(xml_path):
+        return jsonify({"error": "XML file does not exist."}), 404
+        
+    keys_to_dedup = [key] if key else None
+    removed = deduplicate_strings(xml_path, keys=keys_to_dedup, keep=keep)
+    return jsonify({"success": True, "removed_count": removed})
 
 @app.route('/api/update', methods=['GET'])
 def check_update_endpoint():

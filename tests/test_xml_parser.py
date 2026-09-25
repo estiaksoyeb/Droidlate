@@ -10,7 +10,9 @@ from droidlate.parser.xml_parser import (
     remove_string_translation,
     remove_string_translations,
     normalize_attrib_key,
-    sanitize_target_attributes
+    sanitize_target_attributes,
+    find_duplicate_keys,
+    deduplicate_strings
 )
 
 class TestXmlParser(unittest.TestCase):
@@ -324,6 +326,132 @@ Line 3</string>
         self.assertIn("translatable_key", updated_meta)
         self.assertNotIn("non_translatable_key", updated_meta)
         self.assertNotIn("another_non_trans", updated_meta)
+
+    def test_find_duplicate_keys(self):
+        xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="title">Title 1</string>
+    <string name="ok">OK</string>
+    <string name="title">Title 2</string>
+    <string name="cancel">Cancel</string>
+    <string name="title">Title 3</string>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(xml)
+
+        dups = find_duplicate_keys(self.xml_path)
+        self.assertIn("title", dups)
+        self.assertNotIn("ok", dups)
+        self.assertNotIn("cancel", dups)
+        self.assertEqual(len(dups["title"]), 3)
+        self.assertEqual(dups["title"][0]["value"], "Title 1")
+        self.assertEqual(dups["title"][1]["value"], "Title 2")
+        self.assertEqual(dups["title"][2]["value"], "Title 3")
+        self.assertEqual(dups["title"][0]["line"], 3)
+        self.assertEqual(dups["title"][1]["line"], 5)
+        self.assertEqual(dups["title"][2]["line"], 7)
+
+    def test_find_duplicate_keys_plurals(self):
+        xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="items">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+        <item quantity="one">%d item duplicate</item>
+    </plurals>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(xml)
+
+        dups = find_duplicate_keys(self.xml_path)
+        self.assertIn("items#plural#one", dups)
+        self.assertEqual(len(dups["items#plural#one"]), 2)
+        self.assertNotIn("items#plural#other", dups)
+
+    def test_deduplicate_strings_keep_last(self):
+        xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- First comment -->
+    <string name="pref_theme">Light</string>
+    <string name="other">Other</string>
+    <!-- Second comment -->
+    <string name="pref_theme">Dark</string>
+    <string name="pref_theme">System</string>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(xml)
+
+        removed = deduplicate_strings(self.xml_path, keep='last')
+        self.assertEqual(removed, 2)
+
+        with open(self.xml_path, "r", encoding="utf-8") as f:
+            cleaned = f.read()
+
+        # Should only have one occurrence of pref_theme, with value "System"
+        self.assertEqual(cleaned.count('<string name="pref_theme">'), 1)
+        self.assertIn('<string name="pref_theme">System</string>', cleaned)
+        self.assertIn('<string name="other">Other</string>', cleaned)
+
+        # Check that find_duplicate_keys now reports no duplicates
+        dups_after = find_duplicate_keys(self.xml_path)
+        self.assertEqual(len(dups_after), 0)
+
+    def test_deduplicate_strings_keep_first(self):
+        xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pref_theme">Light</string>
+    <string name="pref_theme">Dark</string>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(xml)
+
+        removed = deduplicate_strings(self.xml_path, keep='first')
+        self.assertEqual(removed, 1)
+
+        with open(self.xml_path, "r", encoding="utf-8") as f:
+            cleaned = f.read()
+
+        self.assertEqual(cleaned.count('<string name="pref_theme">'), 1)
+        self.assertIn('<string name="pref_theme">Light</string>', cleaned)
+        self.assertNotIn('Dark', cleaned)
+
+    def test_write_string_translation_cleans_duplicates(self):
+        xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="btn_save">Save 1</string>
+    <string name="btn_save">Save 2</string>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(xml)
+
+        # Writing an updated translation should deduplicate that key
+        write_string_translation(self.xml_path, "btn_save", "Guardar", {})
+
+        with open(self.xml_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertEqual(content.count('<string name="btn_save">'), 1)
+        self.assertIn('<string name="btn_save">Guardar</string>', content)
+        self.assertNotIn("Save 1", content)
+        self.assertNotIn("Save 2", content)
+
+    def test_remove_string_translations_cleans_all_duplicates(self):
+        xml = '''<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="btn_cancel">Cancel 1</string>
+    <string name="btn_ok">OK</string>
+    <string name="btn_cancel">Cancel 2</string>
+</resources>'''
+        with open(self.xml_path, "w", encoding="utf-8") as f:
+            f.write(xml)
+
+        remove_string_translations(self.xml_path, ["btn_cancel"])
+
+        with open(self.xml_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertNotIn("btn_cancel", content)
+        self.assertIn('<string name="btn_ok">OK</string>', content)
 
 if __name__ == "__main__":
     unittest.main()

@@ -451,6 +451,7 @@ body {
 .badge-t { background-color: rgba(166, 227, 161, 0.2); color: var(--success); }
 .badge-r { background-color: rgba(127, 132, 156, 0.2); color: var(--text-dim); }
 .badge-Ø { background-color: rgba(243, 139, 168, 0.2); color: var(--danger); }
+.badge-d { background-color: rgba(243, 139, 168, 0.3); color: var(--danger); border: 1px solid var(--danger); }
 
 /* Right Workspace Editor Panel */
 .editor-workspace {
@@ -1398,6 +1399,108 @@ body {
 
 .btn-save-plural.saved {
     background-color: var(--success);
+    color: var(--bg-crust);
+}
+
+/* Duplicate Detection and Resolution Styles */
+.btn-warning {
+    background-color: var(--warning);
+    color: var(--bg-crust);
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 6px 12px;
+    transition: opacity 0.2s;
+}
+
+.btn-warning:hover {
+    opacity: 0.9;
+}
+
+.stat-duplicate {
+    color: var(--danger) !important;
+    font-weight: 600;
+}
+
+.duplicate-warning-card {
+    background-color: rgba(243, 139, 168, 0.1);
+    border: 1px solid var(--danger);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.duplicate-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--danger);
+    font-size: 14px;
+}
+
+.duplicate-details {
+    font-size: 13px;
+    color: var(--text-main);
+    line-height: 1.5;
+}
+
+.duplicate-occ-list {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.duplicate-occ-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.duplicate-occ-item.is-current {
+    border-color: var(--accent);
+}
+
+.duplicate-occ-line {
+    color: var(--warning);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.duplicate-occ-val {
+    color: var(--text-main);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 500px;
+}
+
+.duplicate-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.btn-danger-outline {
+    background-color: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+
+.btn-danger-outline:hover {
+    background-color: var(--danger);
     color: var(--bg-crust);
 }
 

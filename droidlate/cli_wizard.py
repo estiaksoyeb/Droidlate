@@ -2,7 +2,7 @@ import os
 import sys
 import re
 
-from .parser.xml_parser import parse_strings_xml, write_string_translation
+from .parser.xml_parser import parse_strings_xml, write_string_translation, find_duplicate_keys, deduplicate_strings
 from .parser.diff_engine import load_metadata, update_metadata_entry, categorize_key, validate_placeholders, is_key_orphaned
 from .main import auto_detect_res_dir
 
@@ -22,6 +22,17 @@ def run_wizard():
     if not source_entries:
         print("Error: Base strings.xml is empty or invalid.")
         sys.exit(1)
+        
+    # Warn about duplicate keys in source
+    source_dups = find_duplicate_keys(source_path)
+    if source_dups:
+        print(f"\n[!] Warning: Found {len(source_dups)} duplicate key(s) in source strings.xml:")
+        for k, occs in list(source_dups.items())[:5]:
+            lines_str = ", ".join(f"line {o.get('line')}" for o in occs)
+            print(f"    - '{k}' ({lines_str})")
+        if len(source_dups) > 5:
+            print(f"    ... and {len(source_dups) - 5} more")
+        print("    Duplicate keys will cause Gradle/AAPT2 compilation to fail!")
         
     # Scan for target languages
     locales = []
@@ -52,6 +63,24 @@ def run_wizard():
     target_folder, target_xml = sorted(locales)[sel_idx]
     print(f"\nLoading translations for: {target_folder}")
     
+    # Check for duplicate keys in target language
+    target_dups = find_duplicate_keys(target_xml) if os.path.exists(target_xml) else {}
+    if target_dups:
+        print(f"\n[!] Warning: Found {len(target_dups)} duplicate key(s) in {target_folder}/strings.xml:")
+        for k, occs in list(target_dups.items())[:5]:
+            lines_str = ", ".join(f"line {o.get('line')}" for o in occs)
+            print(f"    - '{k}' ({lines_str})")
+        if len(target_dups) > 5:
+            print(f"    ... and {len(target_dups) - 5} more")
+        print("    Duplicate keys will cause Gradle/AAPT2 compilation to fail!")
+        try:
+            fix = input("    Would you like Droidlate to automatically clean/deduplicate them now? [y/N]: ").strip().lower()
+            if fix == 'y':
+                removed_count = deduplicate_strings(target_xml, keep='last')
+                print(f"    ✓ Cleaned up {removed_count} duplicate definition(s) from {target_folder}/strings.xml!\n")
+        except (KeyboardInterrupt, EOFError):
+            pass
+
     # Load target entries and metadata
     target_entries = parse_strings_xml(target_xml) if os.path.exists(target_xml) else {}
     metadata = load_metadata(target_xml)

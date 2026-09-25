@@ -58,7 +58,12 @@ const el = {
     pluralModalSubtitle: document.getElementById('plural-modal-subtitle'),
     pluralModalBody: document.getElementById('plural-modal-body'),
     pluralModalClose: document.getElementById('plural-modal-close'),
-    btnClosePluralModal: document.getElementById('btn-close-plural-modal')
+    btnClosePluralModal: document.getElementById('btn-close-plural-modal'),
+    btnFixDuplicates: document.getElementById('btn-fix-duplicates'),
+    duplicateWarningCard: document.getElementById('duplicate-warning-card'),
+    duplicateTitle: document.getElementById('duplicate-title'),
+    duplicateDetails: document.getElementById('duplicate-details'),
+    btnDeduplicateKey: document.getElementById('btn-deduplicate-key')
 };
 
 function escapeHtml(str) {
@@ -406,6 +411,7 @@ function renderDashboardCards(languages) {
                     <div class="stat-item stat-item-ellipsis" title="Outdated / Warnings">Outdated / Warnings: <span class="stat-val stat-outdated">${lang.outdated}</span></div>
                     <div class="stat-item">Untranslated: <span class="stat-val stat-untranslated">${lang.untranslated}</span></div>
                     <div class="stat-item">Orphaned: <span class="stat-val stat-untranslated" style="color:var(--danger);">${lang.orphaned || 0}</span></div>
+                    <div class="stat-item">Duplicates: <span class="stat-val ${lang.duplicates > 0 ? 'stat-duplicate' : ''}">${lang.duplicates || 0}</span></div>
                     <div class="stat-item">Total: <span class="stat-val">${lang.total}</span></div>
                 </div>
             </div>
@@ -451,27 +457,7 @@ function showEditor(langFolder) {
             }
             
             // Update count badges on sidebar filter tabs
-            const counts = {
-                'all': state.strings.length,
-                'untranslated': state.strings.filter(s => s.status === 'untranslated').length,
-                'outdated': state.strings.filter(s => s.status === 'outdated' || s.status === 'warnings').length,
-                'warnings': state.strings.filter(s => s.status === 'warnings').length,
-                'readonly': state.strings.filter(s => s.status === 'readonly').length,
-                'orphaned': state.strings.filter(s => s.status === 'orphaned').length
-            };
-
-            el.filterTabs.forEach(tab => {
-                const filter = tab.dataset.filter;
-                const countSpan = tab.querySelector('.tab-count');
-                if (countSpan && counts[filter] !== undefined) {
-                    countSpan.textContent = `(${counts[filter]})`;
-                }
-                if (filter === state.activeFilter) {
-                    tab.classList.add('active');
-                } else {
-                    tab.classList.remove('active');
-                }
-            });
+            updateFilterTabCounts();
 
             applySidebarFilters();
             
@@ -483,6 +469,42 @@ function showEditor(langFolder) {
         .catch(err => {
             el.keysList.innerHTML = '<li class="key-list-item"><span class="key-text stat-untranslated">Failed to load strings list.</span></li>';
         });
+}
+
+function updateFilterTabCounts() {
+    const dupCount = state.strings.filter(s => s.is_duplicate).length;
+    const counts = {
+        'all': state.strings.length,
+        'untranslated': state.strings.filter(s => s.status === 'untranslated').length,
+        'outdated': state.strings.filter(s => s.status === 'outdated' || s.status === 'warnings').length,
+        'warnings': state.strings.filter(s => s.status === 'warnings').length,
+        'duplicates': dupCount,
+        'readonly': state.strings.filter(s => s.status === 'readonly').length,
+        'orphaned': state.strings.filter(s => s.status === 'orphaned').length
+    };
+
+    if (el.btnFixDuplicates) {
+        if (dupCount > 0) {
+            el.btnFixDuplicates.style.display = 'block';
+            el.btnFixDuplicates.textContent = `⚠️ Fix All Duplicates (${dupCount})`;
+            el.btnFixDuplicates.onclick = fixAllDuplicates;
+        } else {
+            el.btnFixDuplicates.style.display = 'none';
+        }
+    }
+
+    el.filterTabs.forEach(tab => {
+        const filter = tab.dataset.filter;
+        const countSpan = tab.querySelector('.tab-count');
+        if (countSpan && counts[filter] !== undefined) {
+            countSpan.textContent = `(${counts[filter]})`;
+        }
+        if (filter === state.activeFilter) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
 }
 
 function applySidebarFilters() {
@@ -497,6 +519,7 @@ function applySidebarFilters() {
         
         if (state.activeFilter === 'all') return true;
         if (state.activeFilter === 'outdated') return item.status === 'outdated' || item.status === 'warnings';
+        if (state.activeFilter === 'duplicates') return !!item.is_duplicate;
         return item.status === state.activeFilter;
     });
 
@@ -517,8 +540,10 @@ function applySidebarFilters() {
                           item.status === 'readonly' ? 'R' :
                           item.status === 'orphaned' ? 'Ø' : 'T';
                           
+        const dupBadge = item.is_duplicate ? '<span class="key-status-dot badge-d" title="Duplicate key in file">DUP</span>' : '';
         li.innerHTML = `
             <span class="key-text">${formatKeyName(item.key)}</span>
+            ${dupBadge}
             <span class="key-status-dot badge-${badgeChar}">${badgeChar}</span>
         `;
         
@@ -590,6 +615,36 @@ function selectKey(key) {
         el.currentKeyAttribs.textContent = attrKeys.map(k => `${k}="${item.attrib[k]}"`).join(', ');
     } else {
         el.currentKeyAttribs.textContent = "None";
+    }
+
+    // Duplicate warning card
+    if (el.duplicateWarningCard) {
+        if (item.is_duplicate) {
+            el.duplicateWarningCard.style.display = 'block';
+            el.duplicateTitle.textContent = `Duplicate Key Detected (${item.duplicate_count} occurrences)`;
+            const occHtml = (item.duplicate_occurrences || []).map((occ, idx) => {
+                const isLast = idx === (item.duplicate_occurrences.length - 1);
+                return `
+                    <div class="duplicate-occ-item">
+                        <span class="duplicate-occ-line">Line ${occ.line}:</span>
+                        <span class="duplicate-occ-tag">&lt;${escapeHtml(occ.tag)}&gt;</span>
+                        <span class="duplicate-occ-val">${escapeHtml(occ.value || '(empty)')}</span>
+                        ${isLast ? '<span class="duplicate-occ-badge">(Current/Kept)</span>' : ''}
+                    </div>
+                `;
+            }).join('');
+            el.duplicateDetails.innerHTML = `
+                <p>This key is defined multiple times in <code>${escapeHtml(state.activeLang || 'target')}/strings.xml</code>. Duplicate resource keys cause AAPT2 Android compilation failures.</p>
+                <div class="duplicate-occurrences-list">
+                    ${occHtml}
+                </div>
+            `;
+            if (el.btnDeduplicateKey) {
+                el.btnDeduplicateKey.onclick = () => deduplicateSingleKey(key);
+            }
+        } else {
+            el.duplicateWarningCard.style.display = 'none';
+        }
     }
 
     // Render panels
@@ -971,6 +1026,15 @@ function saveCurrentTranslation() {
                 activeStr.status = (warnings.length > 0 && !activeStr.ignore_warnings) ? 'warnings' : 'translated';
             }
             
+            // Saving automatically deduplicates this key in XML
+            activeStr.is_duplicate = false;
+            activeStr.duplicate_count = 0;
+            activeStr.duplicate_occurrences = [];
+            if (el.duplicateWarningCard && state.currentKey === activeStr.key) {
+                el.duplicateWarningCard.style.display = 'none';
+            }
+            updateFilterTabCounts();
+
             // Reapply filters to update sidebar list elements
             applySidebarFilters();
             
@@ -1036,6 +1100,7 @@ function pruneCurrentTranslation() {
         if (data.success) {
             // Remove key locally from the state.strings list
             state.strings = state.strings.filter(s => s.key !== state.currentKey);
+            updateFilterTabCounts();
             applySidebarFilters();
             
             // Select next key if matches exist
@@ -1073,6 +1138,95 @@ function pruneCurrentTranslation() {
         el.btnPruneKey.disabled = false;
         el.btnPruneKey.textContent = "Prune Translation";
         alert(`Pruning failed: ${err.message}`);
+    });
+}
+
+function deduplicateSingleKey(key) {
+    if (!key) return;
+    if (el.btnDeduplicateKey) {
+        el.btnDeduplicateKey.disabled = true;
+        el.btnDeduplicateKey.textContent = "Deduplicating...";
+    }
+
+    fetch('/api/deduplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            lang: state.activeLang,
+            key: key,
+            keep: 'last',
+            target: 'target'
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (el.btnDeduplicateKey) {
+            el.btnDeduplicateKey.disabled = false;
+            el.btnDeduplicateKey.textContent = "Deduplicate (Keep Current)";
+        }
+        if (data.success) {
+            const item = state.strings.find(s => s.key === key);
+            if (item) {
+                item.is_duplicate = false;
+                item.duplicate_count = 0;
+                item.duplicate_occurrences = [];
+            }
+            if (el.duplicateWarningCard) {
+                el.duplicateWarningCard.style.display = 'none';
+            }
+            updateFilterTabCounts();
+            applySidebarFilters();
+        } else {
+            alert(data.error || 'Failed to deduplicate key.');
+        }
+    })
+    .catch(err => {
+        if (el.btnDeduplicateKey) {
+            el.btnDeduplicateKey.disabled = false;
+            el.btnDeduplicateKey.textContent = "Deduplicate (Keep Current)";
+        }
+        alert('Network error while deduplicating key.');
+    });
+}
+
+function fixAllDuplicates() {
+    const dupCount = state.strings.filter(s => s.is_duplicate).length;
+    if (dupCount === 0) return;
+
+    if (!confirm(`Are you sure you want to clean up duplicate entries across all ${dupCount} duplicate keys in ${state.activeLang}? The last occurrence of each key will be kept.`)) {
+        return;
+    }
+
+    if (el.btnFixDuplicates) {
+        el.btnFixDuplicates.disabled = true;
+        el.btnFixDuplicates.textContent = "Cleaning duplicates...";
+    }
+
+    fetch('/api/deduplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            lang: state.activeLang,
+            keep: 'last',
+            target: 'target'
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (el.btnFixDuplicates) {
+            el.btnFixDuplicates.disabled = false;
+        }
+        if (data.success) {
+            loadStringsForLanguage(state.activeLang);
+        } else {
+            alert(data.error || 'Failed to clean duplicates.');
+        }
+    })
+    .catch(err => {
+        if (el.btnFixDuplicates) {
+            el.btnFixDuplicates.disabled = false;
+        }
+        alert('Network error while cleaning duplicates.');
     });
 }
 
